@@ -1,5 +1,5 @@
 # Evolutionary Social Dilemma Games
-This is a repo for the capstone project of the "Bio-Inspired AI" at the University of Trento. Agents are represented by decision trees, whose structure is defined by an evolving grammar, that is the genome. We seek for understanding of possible emergent social strategies emphasised by natural selection and mating, while using interpretable algorithms.  
+This is a repo for the capstone project of the [Bio-Inspired AI course](https://sites.google.com/site/giovanniiacca/teaching/bio_ai) at the University of Trento. Agents are represented by decision trees, whose structure is defined by an evolving grammar, that is the genome. We seek for understanding of possible emergent social strategies emphasised by natural selection, while using interpretable algorithms.  
 
 ### Supported MARL environments
 - [Level-based foraging](https://github.com/semitable/lb-foraging)
