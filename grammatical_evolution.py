@@ -29,7 +29,7 @@ from matplotlib import pyplot as plt
 import argparse
 from scoop import futures
 from joblib import Parallel, delayed
-
+import json
 
 TAB = " " * 4
 
@@ -99,7 +99,6 @@ def varAnd(population, toolbox, cxpb, mutpb):
             del offspring[i].fitness.values
 
     return offspring
-
 
 
 def eaSimple(population, toolbox, cxpb, mutpb, ngen, stats=None,
@@ -172,6 +171,7 @@ def eaSimple(population, toolbox, cxpb, mutpb, ngen, stats=None,
     fitnesses = [*toolbox.map(toolbox.evaluate, invalid_ind)]
     leaves = [f[1] for f in fitnesses]
     fitnesses = [f[0] for f in fitnesses]
+
     for i, (ind, fit) in enumerate(zip(invalid_ind, fitnesses)):
         ind.fitness.values = fit
         if logfile is not None and (best is None or best < fit[0]):
@@ -220,6 +220,12 @@ def eaSimple(population, toolbox, cxpb, mutpb, ngen, stats=None,
         # Update the hall of fame with the generated individuals
         if halloffame is not None:
             halloffame.update(offspring)
+        
+        # Store current hof genotype to file
+        gen_hof = {}
+        for i, p in enumerate(halloffame): gen_hof[f"individual_{i}"] = p
+        with open(f"last_gen_hof.json", 'w') as outfile:
+            json.dump(json.dumps(gen_hof), outfile)
 
         # Replace the current population by the offspring
         for o in offspring:
@@ -331,7 +337,6 @@ def ge_mate(ind1, ind2, individual):
     if random.random() < 0.5:
         new_offspring = []
         for idx, ind in enumerate([ind1, ind2]):
-            print(ind)
             _, used = GrammaticalEvolutionTranslator(1, [object], [0]).genotype_to_str(ind)
             if used > len(ind):
                 used = len(ind)
@@ -359,9 +364,6 @@ def grammatical_evolution(fitness_function, inputs, leaf, individuals, generatio
 
     _max_value = 40000
 
-    creator.create("FitnessMax", base.Fitness, weights=(1.0,))
-    creator.create("Individual", ListWithParents, typecode='d', fitness=creator.FitnessMax)
-
     toolbox = base.Toolbox()
 
     # Attribute generator
@@ -370,7 +372,8 @@ def grammatical_evolution(fitness_function, inputs, leaf, individuals, generatio
     # Structure initializers
     if jobs > 1:
         toolbox.register("map", get_map(jobs, timeout))
-        # toolbox.register("map", multiprocess.Pool(jobs).map)
+        #toolbox.register("map", multiprocess.Pool(jobs).map)
+        
     toolbox.register("individual", tools.initRepeat, creator.Individual, toolbox.attr_bool, initial_len)
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 

@@ -20,15 +20,15 @@ S_ACTIONS = ["NONE", "NORTH", "SOUTH", "WEST", "EAST", "LOAD"]
 MAX_STEPS = 1000
 N_EPISODES = 50
 
-p = 5 # players
+p = 20 # players
 field_size = p * 5
-s = field_size // 2 # sight
+s = field_size # sight
 f = p // 2 # max food
 c = False # force cooperation
 grid_representation = True # game-grid or food-levels-tensor format
 refresh_time = .5 # seconds
 
-elitism = 3 # number of best parents to keep in the population
+elitism = 5 # number of best parents to keep in the population
 genome_size = 100 # from source
 population_size = p
 crossover_probability = .5
@@ -36,8 +36,8 @@ mutation_probability = .5
 n_generations = 1000
 plot_every_n_gens = 3
 
-low = -100 # bound for the random initialization of the leaves
-up = 100 # bound for the random initialization of the leaves
+low = -1 # bound for the random initialization of the leaves
+up = 1 # bound for the random initialization of the leaves
 n_actions = 6
 eps = .2 # Epsilon parameter for the epsilon greedy Q-learning
 lr = "auto" # Learning rate q-learning
@@ -77,16 +77,17 @@ grammar = {
     "comp_op": [" < ", " > "],
 }
 
-STEP = 1
+DIVISOR = 10
+STEP = 5
 FOOD_MIN = 0
-FOOD_MAX = 10
+FOOD_MAX = 5 * DIVISOR
 AGENT_MIN = 0
-AGENT_MAX = 10
+AGENT_MAX = 5 * DIVISOR
 ACCESS_MIN = 0
-ACCESS_MAX = 1
-input_types = [AGENT_MIN, AGENT_MAX, STEP, 1] * (GRID_SIZE * GRID_SIZE) + \
-    [FOOD_MIN, FOOD_MAX, STEP, 1] * (GRID_SIZE * GRID_SIZE) + \
-    [ACCESS_MIN, ACCESS_MAX, STEP, 1] * (GRID_SIZE * GRID_SIZE)
+ACCESS_MAX = 1 * DIVISOR
+input_types = [AGENT_MIN, AGENT_MAX, STEP, DIVISOR] * (GRID_SIZE * GRID_SIZE) + \
+    [FOOD_MIN, FOOD_MAX, STEP, DIVISOR] * (GRID_SIZE * GRID_SIZE) + \
+    [ACCESS_MIN, ACCESS_MAX, STEP, DIVISOR] * (GRID_SIZE * GRID_SIZE)
 
 input_types = np.array(input_types).reshape(3 * GRID_SIZE * GRID_SIZE, 4)
 
@@ -354,7 +355,7 @@ def visualize_one_run(population):
 #                   EVOLUTIONARY ALGORITHM
 # ------------------------------------------------------------------
 
-from deap import creator, base, tools
+from deap import creator, base, tools, algorithms
 import random
 
 # Setting individual type and fitness
@@ -372,18 +373,33 @@ toolbox.register("individual", tools.initRepeat, creator.Individual, toolbox.att
 toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
 # Genetic operators
-mutation={'function': "ge_mutate", 'attribute': None}
-crossover={'function': "ge_mate", 'individual': None}
+"""
+    mutation={'function': "ge_mutate", 'attribute': None}
+    crossover={'function': "ge_mate", 'individual': None}
 
-for d in [mutation, crossover]:
-        if "attribute" in d:
-            d['attribute'] = toolbox.attr_bool
-        if "individual" in d:
-            d['individual'] = creator.Individual
+    for d in [mutation, crossover]:
+            if "attribute" in d:
+                d['attribute'] = toolbox.attr_bool
+            if "individual" in d:
+                d['individual'] = creator.Individual
+                
+    toolbox.register("mate", eval(crossover['function']), **{k: v for k, v in crossover.items() if k != "function"})
+    toolbox.register("mutate", eval(mutation['function']), **{k: v for k, v in mutation.items() if k != "function"})
+    toolbox.register("evaluate", evaluate)
+    # Elitism
+    n_best_parents = sorted(list(zip(pop, fitnesses)), reverse=True, key=lambda x: x[1])
+    n_best_parents = [p[0] for p in n_best_parents][:elitism]
 
-toolbox.register("mate", eval(crossover['function']), **{k: v for k, v in crossover.items() if k != "function"})
-toolbox.register("mutate", eval(mutation['function']), **{k: v for k, v in mutation.items() if k != "function"})
-toolbox.register("evaluate", evaluate)
+    # Select the next generation individuals
+    offspring = selection_tournament(pop, fitnesses, len(pop) - elitism)
+    offspring = varAnd(offspring, toolbox, crossover_probability, mutation_probability)
+
+    pop = n_best_parents + offspring
+"""
+
+toolbox.register("mate", tools.cxOnePoint)
+toolbox.register("mutate", tools.mutUniformInt, low=0, up=4000, indpb=0.05)
+toolbox.register("select", tools.selTournament, tournsize=2)
 
 def main():
 
@@ -392,24 +408,24 @@ def main():
     # For each generation
     for gen in range(n_generations):
 
+        elite = tools.selBest(pop, k=elitism)
+
         # Play & Evaluate
-        fitnesses = toolbox.evaluate(pop)
-        
-        # Elitism
-        n_best_parents = sorted(list(zip(pop, fitnesses)), reverse=True, key=lambda x: x[1])
-        n_best_parents = [p[0] for p in n_best_parents][:elitism]
+        offspring = algorithms.varAnd(pop, toolbox, cxpb=crossover_probability, mutpb=mutation_probability)
+        fits = evaluate(offspring)
 
-        # Select the next generation individuals
-        offspring = selection_tournament(pop, fitnesses, len(pop) - elitism)
-        offspring = varAnd(offspring, toolbox, crossover_probability, mutation_probability)
+        for fit, ind in zip(fits, offspring):
+            ind.fitness.values = [fit]
 
-        pop = n_best_parents + offspring
-
+        # Select
+        pop = toolbox.select(pop, k=(len(pop) - elitism)) + elite
+       
+       # Report every X runs
         if gen % plot_every_n_gens == 0: 
+            fitnesses = [ind.fitness.values for ind in offspring]
             print(f"\nrun \t mean fitness \t max fitness")
             print(f"{gen} \t {np.mean(fitnesses):.4f} \t {np.max(fitnesses):.4f}\n")
-            
-            # visualize_one_run(offspring)
+            print(f"Fitnesses: \t {fitnesses}")
     
     env.close()
 
