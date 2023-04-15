@@ -4,7 +4,7 @@ This is a repo for the capstone project of the [Bio-Inspired AI course](https://
 ### Supported MARL environments
 - [Level-based foraging](https://github.com/semitable/lb-foraging)
 
-### Execution
+### Training
 
 Parameters:
 ```
@@ -57,14 +57,15 @@ Parameters:
 ```
 Example:
 ```
-    python run_base_script.py \
-        --jobs 16 --seed 42 --n_actions 6 --learning_rate 0.001 --df 0.05 \
-        --episodes 30 --lambda_ 100 \
-        --generations 500 --cxp 0.5 --mp 0.5 \
-        --low -1 --up 1 \
-        --mutation "function-tools.mutUniformInt#low-0#up-40000#indpb-0.05"
+    python run_base_script.py --players 5 --food 3 --field_size 20 --sight 20 --jobs 16 --seed 42 --n_actions 6 --learning_rate 0.001 --df 0.05 --episodes 10 --lambda_ 100 --generations 50 --cxp 0.5 --mp 0.5 --low -1 --up 1 --mutation "function-tools.mutUniformInt#low-0#up-40000#indpb-0.05"
+```
+
+### Testing
+To visualize the behavior of evolved agents in game sessions: 
+```
+    python evaluate.py --players 5 --food 3 --field_size 20 --sight 20 --episodes 10 --n_actions 6 --learning_rate 0.001 --df 0.05 --low -1 --up 1 --seed 42
 ```
 
 ### Papers
-- [Evolutionary Learning of Interpretable Decision Trees | IEEE Journals & Magazine | IEEE Xplore](https://ieeexplore.ieee.org/document/10015004)
+- [Evolutionary Learning of Interpretable Decision Trees](https://ieeexplore.ieee.org/document/10015004)
 - [Multi-agent Reinforcement Learning in Sequential Social Dilemmas](http://arxiv.org/abs/1702.03037)

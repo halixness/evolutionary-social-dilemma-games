@@ -58,11 +58,17 @@ parser.add_argument("--mp", default=0.5, type=float, help="Mutation probability"
 parser.add_argument("--mutation", default="function-tools.mutUniformInt#low-0#up-40000#indpb-0.1", type=string_to_dict, help="Mutation operator. String in the format function-value#function_param_-value_1... The operators from the DEAP library can be used by setting the function to 'function-tools.<operator_name>'. Default: Uniform Int Mutation")
 parser.add_argument("--crossover", default="function-tools.cxOnePoint", type=string_to_dict, help="Crossover operator, see Mutation operator. Default: One point")
 parser.add_argument("--selection", default="function-tools.selTournament#tournsize-2", type=string_to_dict, help="Selection operator, see Mutation operator. Default: tournament of size 2")
+parser.add_argument("--stats", default=None, type=str, help="Specific folder to store the stats for an experiment. Default is yyyy-mm-dd-HH-MM.")
 
 parser.add_argument("--genotype_len", default=100, type=int, help="Length of the fixed-length genotype")
 parser.add_argument("--low", default=-10, type=float, help="Lower bound for the random initialization of the leaves")
 parser.add_argument("--up", default=10, type=float, help="Upper bound for the random initialization of the leaves")
 
+# Parse args
+args = parser.parse_args()
+
+best = None
+lr = "auto" if args.learning_rate == "auto" else float(args.learning_rate)
 
 # Setup of the logging
 date = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -70,11 +76,15 @@ logdir = "logs/gym/{}_{}".format(date, "".join(np.random.choice(list(string.asci
 logfile = os.path.join(logdir, "log.txt")
 os.makedirs(logdir)
 
-args = parser.parse_args()
+if args.stats:
+    statsdirname = args.stats
+else:
+    statsdirname = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
 
-best = None
-lr = "auto" if args.learning_rate == "auto" else float(args.learning_rate)
-
+statsdir = "stats/{}".format(statsdirname)
+if not os.path.exists(statsdir): 
+    os.makedirs(statsdir)
+    os.makedirs(f"{statsdir}/generations")
 
 # Creation of an ad-hoc Leaf class
 class CLeaf(RandomlyInitializedEpsGreedyLeaf):
@@ -166,7 +176,7 @@ def fitness(x, episodes=args.episodes):
             entry_point="lbforaging.foraging:ForagingEnv",
             kwargs={
                 "players": args.players,
-                "max_player_level": 3,
+                "max_player_level": args.max_player_level,
                 "field_size": (args.field_size, args.field_size),
                 "max_food": args.food,
                 "sight": args.sight,
@@ -221,9 +231,18 @@ def fitness(x, episodes=args.episodes):
     except Exception as ex:
         if len(global_cumulative_rewards) == 0:
             global_cumulative_rewards = -1000
-    
-    e.close()
 
+    # Store player stats for each generation
+    gens_done = sum(os.path.isdir(i) for i in os.listdir(f"{statsdir}/generations"))
+    if not os.path.exists(f"{statsdir}/generations/gen_{gens_done + 1}"):
+        os.makedirs(f"{statsdir}/generations/gen_{gens_done + 1}")
+
+    for i, p in enumerate(e.players):
+        with open(f"{statsdir}/generations/gen_{gens_done + 1}/player_{i}_stats.json", 'w') as outfile:
+                json.dump(p.stat_load_history, outfile)
+        
+    # Close and return results
+    e.close()
     fitness = np.mean(global_cumulative_rewards),
     return fitness, x.leaves
 
@@ -244,9 +263,29 @@ if __name__ == '__main__':
     import collections
     from joblib import parallel_backend
 
+    # Storing configuration
+    curr_config = {
+        "max_food": args.food,
+        "field_size": args.field_size,
+        "sight": args.sight,
+        "players": args.players,
+        "learning_rate": args.learning_rate,
+        "df": args.df,
+        "episodes": args.episodes,
+        "lambda_": args.lambda_,
+        "generations": args.generations,
+        "cxp": args.cxp,
+        "mp": args.mp,
+    }
+
+    if logdir:
+        with open(f"{statsdir}/environment_settings.json", 'w') as outfile:
+            json.dump(curr_config, outfile)
+
+
     # this only works well on UNIX systems
     with parallel_backend("multiprocessing"):
-        pop, log, hof, best_leaves = grammatical_evolution(fit_fcn, inputs=input_space_size, leaf=CLeaf, individuals=args.lambda_, generations=args.generations, jobs=args.jobs, cx_prob=args.cxp, m_prob=args.mp, logfile=logfile, seed=args.seed, mutation=args.mutation, crossover=args.crossover, initial_len=args.genotype_len, selection=args.selection)
+        pop, log, hof, best_leaves = grammatical_evolution(fit_fcn, statsdir=statsdir, inputs=input_space_size, leaf=CLeaf, individuals=args.lambda_, generations=args.generations, jobs=args.jobs, cx_prob=args.cxp, m_prob=args.mp, logfile=logfile, seed=args.seed, mutation=args.mutation, crossover=args.crossover, initial_len=args.genotype_len, selection=args.selection)
 
     # Log best individual
     with open(logfile, "a") as log_:

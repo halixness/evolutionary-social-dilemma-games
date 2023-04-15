@@ -36,6 +36,8 @@ class Player:
         self.history = None
         self.current_step = None
 
+        self.stat_load_history = []
+
     def setup(self, position, level, field_size):
         self.history = []
         self.position = position
@@ -55,6 +57,14 @@ class Player:
             return self.controller.name
         else:
             return "Player"
+        
+    def store_load_action(self, agents_involved, food_level):
+        self.stat_load_history.append({
+            "agents_involved": int(agents_involved),
+            "agent_level": int(self.level),
+            "food_level": int(food_level),
+            "reward": int(self.reward)
+        })
 
 
 class ForagingEnv(Env):
@@ -528,7 +538,6 @@ class ForagingEnv(Env):
                 loading_players.add(player)
 
         # and do movements for non colliding players
-
         for k, v in collisions.items():
             if len(v) > 1:  # make sure no more than an player will arrive at location
                 continue
@@ -536,11 +545,13 @@ class ForagingEnv(Env):
 
         # finally process the loadings:
         while loading_players:
+
             # find adjacent food
             player = loading_players.pop()
             frow, fcol = self.adjacent_food_location(*player.position)
             food = self.field[frow, fcol]
 
+            # Any other players for that food that are trying to load it?
             adj_players = self.adjacent_players(frow, fcol)
             adj_players = [
                 p for p in adj_players if p in loading_players or p is player
@@ -548,6 +559,7 @@ class ForagingEnv(Env):
 
             adj_player_level = sum([a.level for a in adj_players])
 
+            # Adj players just processed, remove from list
             loading_players = loading_players - set(adj_players)
 
             if adj_player_level < food:
@@ -562,7 +574,14 @@ class ForagingEnv(Env):
                 if self._normalize_reward:
                     a.reward = a.reward / float(
                         adj_player_level * self._food_spawned
-                    )  # normalize reward
+                    )  # normalize reward by: total player levels and total food levels
+
+            # log the event for statistics
+            player.store_load_action(
+                len(adj_players),           # agents involved
+                self.field[frow, fcol],     # food level
+            )
+
             # and the food is removed
             self.field[frow, fcol] = 0
 

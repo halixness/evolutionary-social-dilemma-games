@@ -101,7 +101,7 @@ def varAnd(population, toolbox, cxpb, mutpb):
     return offspring
 
 
-def eaSimple(population, toolbox, cxpb, mutpb, ngen, stats=None,
+def eaSimple(population, toolbox, cxpb, mutpb, ngen, statsdir=None, stats=None,
              halloffame=None, verbose=__debug__, logfile=None, var=varAnd):
     """This algorithm reproduce the simplest evolutionary algorithm as
     presented in chapter 7 of [Back2000]_.
@@ -222,10 +222,15 @@ def eaSimple(population, toolbox, cxpb, mutpb, ngen, stats=None,
             halloffame.update(offspring)
         
         # Store current hof genotype to file
-        gen_hof = {}
-        for i, p in enumerate(halloffame): gen_hof[f"individual_{i}"] = p
-        with open(f"last_gen_hof.json", 'w') as outfile:
-            json.dump(json.dumps(gen_hof), outfile)
+        if statsdir:
+            gen_hof = {}
+            for i, p in enumerate(halloffame): gen_hof[f"individual_{i}"] = p
+
+            if not os.path.exists(f"{statsdir}/generations/gen_{gen}"): 
+                os.makedirs(f"{statsdir}/generations/gen_{gen}")
+
+            with open(f"{statsdir}/generations/gen_{gen}/hof.json", 'w') as outfile:
+                json.dump(gen_hof, outfile)
 
         # Replace the current population by the offspring
         for o in offspring:
@@ -358,7 +363,7 @@ def ge_mutate(ind, attribute):
     return ind,
 
 
-def grammatical_evolution(fitness_function, inputs, leaf, individuals, generations, cx_prob, m_prob, initial_len=100, selection={'function': "tools.selBest"}, mutation={'function': "ge_mutate", 'attribute': None}, crossover={'function': "ge_mate", 'individual': None}, seed=0, jobs=1, logfile=None, timeout=10*60):
+def grammatical_evolution(fitness_function, inputs, leaf, individuals, generations, cx_prob, m_prob, statsdir=None, initial_len=100, selection={'function': "tools.selBest"}, mutation={'function': "ge_mutate", 'attribute': None}, crossover={'function': "ge_mate", 'individual': None}, seed=0, jobs=1, logfile=None, timeout=10*60):
     random.seed(seed)
     np.random.seed(seed)
 
@@ -397,7 +402,7 @@ def grammatical_evolution(fitness_function, inputs, leaf, individuals, generatio
     stats.register("min", np.min)
     stats.register("max", np.max)
     
-    pop, log, best_leaves = eaSimple(pop, toolbox, cxpb=cx_prob, mutpb=m_prob, ngen=generations, 
+    pop, log, best_leaves = eaSimple(pop, toolbox, statsdir=statsdir, cxpb=cx_prob, mutpb=m_prob, ngen=generations, 
                                    stats=stats, halloffame=hof, verbose=True, logfile=logfile)
     
     return pop, log, hof, best_leaves
