@@ -4,7 +4,16 @@ This is a repo for the capstone project of the [Bio-Inspired AI course](https://
 ### Supported MARL environments
 - [Level-based foraging](https://github.com/semitable/lb-foraging)
 
+### Added features
+- Generation-wise player event logging
+- Hall of Fame checkpointing
+- Data analysis scripts
+
 ### Training
+Run with parallel processing (episode-wise):
+```
+    python run_base_script.py --jobs 16 --stats exp1 --players 5 --food 3 --field_size 8 --sight 5 --seed 42 --n_actions 6 --learning_rate 0.001 --df 0.7 --episodes 50 --lambda_ 50 --generations 50 --cxp 0.5 --mp 0.7 --low -1 --up 1 --mutation "function-tools.mutUniformInt#low-0#up-40000#indpb-0.05" --eps 0.4 --episode_len 200
+```
 
 Parameters:
 ```
@@ -55,15 +64,11 @@ Parameters:
     --low LOW             Lower bound for the random initialization of the leaves
     --up UP               Upper bound for the random initialization of the leaves
 ```
-Example:
-```
-    python run_base_script.py --players 5 --food 3 --field_size 20 --sight 20 --jobs 16 --seed 42 --n_actions 6 --learning_rate 0.001 --df 0.05 --episodes 10 --lambda_ 100 --generations 50 --cxp 0.5 --mp 0.5 --low -1 --up 1 --mutation "function-tools.mutUniformInt#low-0#up-40000#indpb-0.05"
-```
 
 ### Testing
 To visualize the behavior of evolved agents in game sessions: 
 ```
-    python evaluate.py --players 5 --food 3 --field_size 20 --sight 20 --episodes 10 --n_actions 6 --learning_rate 0.001 --df 0.05 --low -1 --up 1 --seed 42
+    python evaluate.py --genome stats/exp1/generations/gen_50/hof.json --players 5 --food 3 --field_size 8 --sight 5 --episodes 50 --n_actions 6 --learning_rate 0.001 --df 0.7 --low -1 --up 1 --seed 42 --eps 0
 ```
 
 ### Papers
