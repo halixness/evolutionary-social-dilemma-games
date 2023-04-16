@@ -30,6 +30,7 @@ import argparse
 from scoop import futures
 from joblib import Parallel, delayed
 import json
+import matplotlib.pyplot as plt
 
 TAB = " " * 4
 
@@ -168,7 +169,10 @@ def eaSimple(population, toolbox, cxpb, mutpb, ngen, statsdir=None, stats=None,
 
     # Evaluate the individuals with an invalid fitness
     invalid_ind = [ind for ind in population if not ind.fitness.valid]
-    fitnesses = [*toolbox.map(toolbox.evaluate, invalid_ind)]
+    
+    eval_invalid_inds = [{"individual": ind, "gen": 0} for ind in invalid_ind]
+    fitnesses = [*toolbox.map(toolbox.evaluate, eval_invalid_inds)]
+    
     leaves = [f[1] for f in fitnesses]
     fitnesses = [f[0] for f in fitnesses]
 
@@ -192,6 +196,7 @@ def eaSimple(population, toolbox, cxpb, mutpb, ngen, statsdir=None, stats=None,
         print(logbook.stream)
 
     # Begin the generational process
+    stats_fitness = []
     for gen in range(1, ngen + 1):
 
         # Select the next generation individuals
@@ -202,7 +207,10 @@ def eaSimple(population, toolbox, cxpb, mutpb, ngen, statsdir=None, stats=None,
 
         # Evaluate the individuals with an invalid fitness
         invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-        fitnesses = [*toolbox.map(toolbox.evaluate, invalid_ind)]
+
+        eval_invalid_inds = [{"individual": ind, "gen": gen} for ind in invalid_ind]
+        fitnesses = [*toolbox.map(toolbox.evaluate, eval_invalid_inds)]
+
         leaves = [f[1] for f in fitnesses]
         fitnesses = [f[0] for f in fitnesses]
 
@@ -244,6 +252,15 @@ def eaSimple(population, toolbox, cxpb, mutpb, ngen, statsdir=None, stats=None,
         logbook.record(gen=gen, nevals=len(invalid_ind), **record)
         if verbose:
             print(logbook.stream)
+
+        # Save a plot of statistics
+        stats_fitness.append(np.mean([ind.fitness.values[0] for ind in population]))
+
+        plt.xlabel("generation")
+        plt.ylabel("avg. fitness")
+        plt.plot(list(range(len(stats_fitness))), stats_fitness)
+        plt.grid()
+        plt.savefig(f"{statsdir}/fitness.png")
 
     return population, logbook, best_leaves
 

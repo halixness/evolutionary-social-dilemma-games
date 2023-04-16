@@ -48,9 +48,9 @@ parser.add_argument("--seed", default=0, type=int, help="Random seed")
 parser.add_argument("--n_actions", default=4, type=int, help="The number of action that the agent can perform in the environment")
 parser.add_argument("--learning_rate", default="auto", help="The learning rate to be used for Q-learning. Default is: 'auto' (1/k)")
 parser.add_argument("--df", default=0.9, type=float, help="The discount factor used for Q-learning")
-parser.add_argument("--eps", default=0.05, type=float, help="Epsilon parameter for the epsilon greedy Q-learning")
+parser.add_argument("--eps", default=0.4, type=float, help="Epsilon parameter for the epsilon greedy Q-learning")
 parser.add_argument("--episodes", default=50, type=int, help="Number of episodes that the agent faces in the fitness evaluation phase")
-parser.add_argument("--episode_len", default=1000, type=int, help="The max length of an episode in timesteps")
+parser.add_argument("--episode_len", default=500, type=int, help="The max length of an episode in timesteps")
 parser.add_argument("--lambda_", default=30, type=int, help="Population size")
 parser.add_argument("--generations", default=1000, type=int, help="Number of generations")
 parser.add_argument("--cxp", default=0.5, type=float, help="Crossover probability")
@@ -145,13 +145,13 @@ def evaluate_fitness(fitness_function, leaf, genotype, episodes=args.episodes):
         DT instantiation and evaluation
     """
     # from genotype => phenotype (DT specs) => build DT agent
-    phenotype, _ = GrammaticalEvolutionTranslator(grammar).genotype_to_str(genotype)
+    phenotype, _ = GrammaticalEvolutionTranslator(grammar).genotype_to_str(genotype["individual"])
     bt = PythonDT(phenotype, leaf) # object type
 
-    return fitness_function(bt, episodes)
+    return fitness_function(bt, gen=genotype["gen"], episodes=episodes)
 
 
-def fitness(x, episodes=args.episodes):
+def fitness(x, gen=None, episodes=args.episodes):
     """
         Gym Environment Fitness Evaluation
     """
@@ -233,14 +233,14 @@ def fitness(x, episodes=args.episodes):
             global_cumulative_rewards = -1000
 
     # Store player stats for each generation
-    gens_done = sum(os.path.isdir(i) for i in os.listdir(f"{statsdir}/generations"))
-    if not os.path.exists(f"{statsdir}/generations/gen_{gens_done + 1}"):
-        os.makedirs(f"{statsdir}/generations/gen_{gens_done + 1}")
+    if gen:
+        if not os.path.exists(f"{statsdir}/generations/gen_{gen}"):
+            os.makedirs(f"{statsdir}/generations/gen_{gen}")
 
-    for i, p in enumerate(e.players):
-        with open(f"{statsdir}/generations/gen_{gens_done + 1}/player_{i}_stats.json", 'w') as outfile:
-                json.dump(p.stat_load_history, outfile)
-        
+        for i, p in enumerate(e.players):
+            with open(f"{statsdir}/generations/gen_{gen}/player_{i}_stats.json", 'a') as outfile:
+                    outfile.write(f"{json.dumps(p.stat_load_history)}\n")
+            
     # Close and return results
     e.close()
     fitness = np.mean(global_cumulative_rewards),
@@ -248,7 +248,7 @@ def fitness(x, episodes=args.episodes):
 
 
 def fit_fcn(x):
-    return evaluate_fitness(fitness, CLeaf, x)
+    return evaluate_fitness(fitness_function=fitness, leaf=CLeaf, genotype=x)
 
 
 # Workaround for parallel processing on Windows
@@ -276,12 +276,13 @@ if __name__ == '__main__':
         "generations": args.generations,
         "cxp": args.cxp,
         "mp": args.mp,
+        "eps": args.eps,
     }
 
+    # Save settings
     if logdir:
         with open(f"{statsdir}/environment_settings.json", 'w') as outfile:
             json.dump(curr_config, outfile)
-
 
     # this only works well on UNIX systems
     with parallel_backend("multiprocessing"):

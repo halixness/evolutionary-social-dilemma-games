@@ -181,7 +181,7 @@ def visualize_one_run(genome):
 
             # Render last episode's step
             env.render()
-            #time.sleep(refresh_time)
+            time.sleep(refresh_time)
 
         print(f"Episode rewards: \t {episode_rewards}")
 

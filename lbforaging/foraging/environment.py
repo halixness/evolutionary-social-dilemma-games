@@ -63,7 +63,7 @@ class Player:
             "agents_involved": int(agents_involved),
             "agent_level": int(self.level),
             "food_level": int(food_level),
-            "reward": int(self.reward)
+            "reward": float(self.reward)
         })
 
 
