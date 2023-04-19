@@ -10,10 +10,15 @@ This is a repo for the capstone project of the [Bio-Inspired AI course](https://
 - Data analysis scripts
 
 ### Training
-Run with parallel processing (episode-wise):
+Run in single-tree evolving mode:
 ```
     python run_base_script.py --jobs 16 --stats exp1 --players 5 --food 3 --field_size 8 --sight 5 --seed 42 --n_actions 6 --learning_rate 0.001 --df 0.7 --episodes 50 --lambda_ 50 --generations 50 --cxp 0.5 --mp 0.7 --low -1 --up 1 --mutation "function-tools.mutUniformInt#low-0#up-40000#indpb-0.05" --eps 0.4 --episode_len 200
 ```
+
+Run in advanced, multi-tree evolving mode:
+```
+ python run_multi_dt.py --jobs 16 --stats exp1_19_04_23 --players 5 --food 3 --field_size 8 --sight 8 --seed 42 --n_actions 6 --learning_rate 0.001 --df 0.9 --episodes 100 --episode_len 500 --lambda_ 100 --generations 100 --cxp 0.1 --mp 1.0 --low -1 --up 1 --mutation "function-tools.mutUniformInt#low-0#up-40000#indpb-0.05" --selection "function-tools.selTournament#tournsize-2" --crossover "function-tools.cxOnePoint" --eps 1.0 --decay 0.99 --learning_rate "auto"
+ ```
 
 Parameters:
 ```

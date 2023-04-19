@@ -31,6 +31,7 @@ from scoop import futures
 from joblib import Parallel, delayed
 import json
 import matplotlib.pyplot as plt
+from scipy.spatial import distance_matrix
 
 TAB = " " * 4
 
@@ -197,6 +198,7 @@ def eaSimple(population, toolbox, cxpb, mutpb, ngen, statsdir=None, stats=None,
 
     # Begin the generational process
     stats_fitness = []
+    diversities = []
     for gen in range(1, ngen + 1):
 
         # Select the next generation individuals
@@ -253,14 +255,29 @@ def eaSimple(population, toolbox, cxpb, mutpb, ngen, statsdir=None, stats=None,
         if verbose:
             print(logbook.stream)
 
+        # Compute population stats
+        diversity = np.sum(
+            distance_matrix(np.array(population), np.array(population)).flatten()
+        )
+        diversities.append(diversity)
+
         # Save a plot of statistics
         stats_fitness.append(np.mean([ind.fitness.values[0] for ind in population]))
 
-        plt.xlabel("generation")
-        plt.ylabel("avg. fitness")
-        plt.plot(list(range(len(stats_fitness))), stats_fitness)
-        plt.grid()
-        plt.savefig(f"{statsdir}/fitness.png")
+        fig, ax = plt.subplots()
+        ax.set_xlabel("generation")
+        ax.set_ylabel("avg. fitness")
+        ax.plot(list(range(len(stats_fitness))), stats_fitness)
+        ax.grid()
+        fig.savefig(f"{statsdir}/fitness.png")
+
+        # Save a plot of diversity
+        fig, ax = plt.subplots()
+        ax.set_xlabel("generation")
+        ax.set_ylabel("Diversity")
+        ax.plot(list(range(len(diversities))), diversities)
+        ax.grid()
+        fig.savefig(f"{statsdir}/diversity.png")
 
     return population, logbook, best_leaves
 
