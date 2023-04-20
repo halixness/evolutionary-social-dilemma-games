@@ -270,6 +270,7 @@ def eaSimple(population, toolbox, cxpb, mutpb, ngen, statsdir=None, stats=None,
         ax.plot(list(range(len(stats_fitness))), stats_fitness)
         ax.grid()
         fig.savefig(f"{statsdir}/fitness.png")
+        plt.close(fig)
 
         # Save a plot of diversity
         fig, ax = plt.subplots()
@@ -278,7 +279,8 @@ def eaSimple(population, toolbox, cxpb, mutpb, ngen, statsdir=None, stats=None,
         ax.plot(list(range(len(diversities))), diversities)
         ax.grid()
         fig.savefig(f"{statsdir}/diversity.png")
-
+        plt.close(fig)
+        
     return population, logbook, best_leaves
 
 

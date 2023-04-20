@@ -35,6 +35,7 @@ def string_to_dict(x):
     return result
 
 parser = argparse.ArgumentParser()
+parser.add_argument("--config_file", default=None, type=str, help="(optional) path to a .json args file. Missing params will be applied by default")
 parser.add_argument("--players", default=5, type=int, help="Number of players involved.")
 parser.add_argument("--field_size", default=15, type=int, help="# of tiles of space lenght. The final game space is a NxN area.")
 parser.add_argument("--sight", default=5, type=int, help="# of tiles of view range. The final view is a KxK area.")
@@ -62,13 +63,19 @@ parser.add_argument("--stats", default=None, type=str, help="Specific folder to 
 parser.add_argument("--random_init", action="store_true", help="Randomly initializes the leaves in [-1, 1[")
 parser.add_argument("--decay", default=0.99, type=float, help="The decay factor for the epsilon decay (eps_t = eps_0 * decay^t)")
 
-
 parser.add_argument("--genotype_len", default=100, type=int, help="Length of the fixed-length genotype")
 parser.add_argument("--low", default=-10, type=float, help="Lower bound for the random initialization of the leaves")
 parser.add_argument("--up", default=10, type=float, help="Upper bound for the random initialization of the leaves")
 
 # Parse args
 args = parser.parse_args()
+
+# Load from JSON if possible
+if args.config_file:
+    with open(args.config_file, "r") as agsCfgFile:
+        t_args = argparse.Namespace()
+        t_args.__dict__.update(json.load(agsCfgFile))
+        args = parser.parse_args(namespace=t_args)
 
 best = None
 lr = "auto" if args.learning_rate == "auto" else float(args.learning_rate)
@@ -306,29 +313,9 @@ if __name__ == '__main__':
     from joblib import parallel_backend
 
     # Storing configuration
-    curr_config = {
-        "max_food": args.food,
-        "field_size": args.field_size,
-        "sight": args.sight,
-        "players": args.players,
-        "learning_rate": args.learning_rate,
-        "df": args.df,
-        "episodes": args.episodes,
-        "episode_len": args.episode_len,
-        "lambda_": args.lambda_,
-        "generations": args.generations,
-        "cxp": args.cxp,
-        "mp": args.mp,
-        "eps": args.eps,
-        "decay": args.decay,
-        "crossover": args.crossover,
-        "mutation": args.mutation,
-    }
-
-    # Save settings
     if logdir:
         with open(f"{statsdir}/environment_settings.json", 'w') as outfile:
-            json.dump(curr_config, outfile)
+            json.dump(vars(args), outfile)
 
     # this only works well on UNIX systems
     with parallel_backend("multiprocessing"):

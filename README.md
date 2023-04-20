@@ -17,8 +17,52 @@ Run in single-tree evolving mode:
 
 Run in advanced, multi-tree evolving mode:
 ```
- python run_multi_dt.py --jobs 16 --stats exp1_19_04_23 --players 5 --food 3 --field_size 8 --sight 8 --seed 42 --n_actions 6 --learning_rate 0.001 --df 0.9 --episodes 100 --episode_len 500 --lambda_ 100 --generations 100 --cxp 0.1 --mp 1.0 --low -1 --up 1 --mutation "function-tools.mutUniformInt#low-0#up-40000#indpb-0.05" --selection "function-tools.selTournament#tournsize-2" --crossover "function-tools.cxOnePoint" --eps 1.0 --decay 0.99 --learning_rate "auto"
+ python run_multi_dt.py --config_file
  ```
+
+ Following the configuration format:
+```
+ {
+    "stats": "exp1_19_04_23",
+    "players": 5,
+    "field_size": 8,
+    "sight": 8,
+    "food": 3,
+    "cooperation": false,
+    "grid": true,
+    "max_player_level": 5,
+    "jobs": 16,
+    "seed": 42,
+    "n_actions": 6,
+    "learning_rate": "auto",
+    "df": 0.9,
+    "eps": 1,
+    "episodes": 50,
+    "episode_len": 200,
+    "lambda_": 30,
+    "generations": 50,
+    "cxp": 0.1,
+    "mp": 1,
+    "mutation": {
+        "function": "tools.mutUniformInt",
+        "low": 0,
+        "up": 40000,
+        "indpb": 0.05
+    },
+    "crossover": {
+        "function": "tools.cxOnePoint"
+    },
+    "selection": {
+        "function": "tools.selTournament",
+        "tournsize": 2
+    },
+    "random_init": false,
+    "decay": 0.99,
+    "genotype_len": 100,
+    "low": -1,
+    "up": 1
+}
+```
 
 Parameters:
 ```
