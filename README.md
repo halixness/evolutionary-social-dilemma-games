@@ -117,7 +117,7 @@ Parameters:
 ### Testing
 To visualize the behavior of evolved agents in game sessions: 
 ```
-    python evaluate.py --genome stats/exp1/generations/gen_50/hof.json --players 5 --food 3 --field_size 8 --sight 5 --episodes 50 --n_actions 6 --learning_rate 0.001 --df 0.7 --low -1 --up 1 --seed 42 --eps 0
+    python evaluate.py --config config.json --genome stats/exp1_24_04_23/generations/gen_35/hof.json
 ```
 
 ### Papers

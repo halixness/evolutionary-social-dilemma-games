@@ -1,40 +1,41 @@
 {
-    "stats": "exp3_20_04_23",
+    "stats": "cooperative1_24_04_23",
     "players": 5,
     "field_size": 8,
-    "sight": 8,
+    "sight": 3,
     "food": 3,
-    "cooperation": false,
+    "cooperation": true,
     "grid": true,
     "max_player_level": 5,
     "jobs": 16,
     "seed": 42,
     "n_actions": 6,
     "learning_rate": "auto",
-    "df": 0.9,
-    "eps": 1,
     "episodes": 50,
-    "episode_len": 100,
+    "episode_len": 50,
+    "generations": 1000,
+    "epsDecay": true,
+    "df": 0.7,
+    "eps": 1.0,
     "lambda_": 50,
-    "generations": 50,
-    "cxp": 0.1,
+    "decay": 0.99,
+    "genotype_len": 100,
+    "cxp": 0.2,
     "mp": 1,
     "mutation": {
         "function": "tools.mutUniformInt",
         "low": 0,
         "up": 40000,
-        "indpb": 1
+        "indpb": 0.8
     },
     "crossover": {
         "function": "tools.cxOnePoint"
     },
     "selection": {
         "function": "tools.selTournament",
-        "tournsize": 2
+        "tournsize": 3
     },
     "random_init": false,
-    "decay": 0.99,
-    "genotype_len": 200,
     "low": -1,
     "up": 1
 }

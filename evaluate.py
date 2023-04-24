@@ -37,6 +37,7 @@ def string_to_dict(x):
 
 parser = argparse.ArgumentParser()
 
+parser.add_argument("--config_file", default=None, type=str, help="(optional) path to a .json args file. Missing params will be applied by default")
 parser.add_argument("--genome", default="last_gen_hof.json", type=str, help="JSON file containing a dictionary of genomes.")
 parser.add_argument("--players", default=5, type=int, help="Number of players involved.")
 parser.add_argument("--field_size", default=15, type=int, help="# of tiles of space lenght. The final game space is a NxN area.")
@@ -45,6 +46,7 @@ parser.add_argument("--food", default=1, type=int, help="Max # of food laid on t
 parser.add_argument("--cooperation", default=False, type=bool, help="Force players cooperation.")
 parser.add_argument("--grid", default=True, type=bool, help="Use the grid observation space.")
 parser.add_argument("--max_player_level", default=5, type=int, help="Max achievable player (and food?) level")
+parser.add_argument("--multitree", default=False, type=bool, help="Instantiate one DT per agent.")
 
 parser.add_argument("--seed", default=0, type=int, help="Random seed")
 parser.add_argument("--n_actions", default=4, type=int, help="The number of action that the agent can perform in the environment")
@@ -58,6 +60,13 @@ parser.add_argument("--low", default=-10, type=float, help="Lower bound for the 
 parser.add_argument("--up", default=10, type=float, help="Upper bound for the random initialization of the leaves")
 
 args = parser.parse_args()
+
+# Load from JSON if possible
+if args.config_file:
+    with open(args.config_file, "r") as agsCfgFile:
+        t_args = argparse.Namespace()
+        t_args.__dict__.update(json.load(agsCfgFile))
+        args = parser.parse_args(namespace=t_args)
 
 np.random.seed(args.seed)
 
@@ -106,7 +115,7 @@ grammar = {
 }
 
 DIVISOR = 1
-STEP = 5
+STEP = 1
 FOOD_MIN = 0
 FOOD_MAX = args.max_player_level * DIVISOR
 AGENT_MIN = 0
@@ -145,9 +154,17 @@ def visualize_one_run(genome):
         Each processor runs an episode
     """
 
-    # Convert agent genome => phenotype => DT
-    phenotype, _ = GrammaticalEvolutionTranslator(grammar).genotype_to_str(genome)
-    agent = PythonDT(phenotype, CLeaf) # object type
+    if args.multitree:
+        agents = []
+        for p in range(args.players):
+            # from genotype => phenotype (DT specs) => build DT agent
+            phenotype, _ = GrammaticalEvolutionTranslator(grammar).genotype_to_str(genome)
+            agent = PythonDT(phenotype, CLeaf) # object type
+            agents.append(agent)
+    else:
+        # Convert agent genome => phenotype => DT
+        phenotype, _ = GrammaticalEvolutionTranslator(grammar).genotype_to_str(genome)
+        agent = PythonDT(phenotype, CLeaf) # object type
 
     for iteration, e in enumerate(range(args.episodes)):
 
@@ -155,9 +172,12 @@ def visualize_one_run(genome):
         episode_rewards = np.zeros(args.players)
 
         env.seed(iteration)
-
+        
         # Prepare
-        agent.new_episode()
+        if args.multitree: 
+            for agent in agents: agent.new_episode()
+        else:
+            agent.new_episode()
 
         # Fixed step to evaluate agents
         for t in range(args.episode_len):
@@ -166,14 +186,28 @@ def visualize_one_run(genome):
             actions = []
             for i in range(args.players):
                 obs = observations[i].reshape(3 * GRID_SIZE * GRID_SIZE) 
-                action = agent(obs)
-                action = action if action is not None else 0
+
+                if i == 0: 
+                    print(observations[0][0])
+                
+                if args.multitree:
+                    action = agents[i](obs)
+                else:
+                    action = agent(obs)
+                
+                #action = action if action is not None else 0
                 actions.append(action)
 
             # Update game state
             observations, curr_rewards, done, info = env.step(actions)
 
-            agent.set_reward(np.sum(curr_rewards))
+            print(curr_rewards)
+            print("-------------")
+
+            if args.multitree:
+                for i, r in enumerate(curr_rewards): agents[i].set_reward(r)
+            else:
+                agent.set_reward(np.sum(curr_rewards))
             episode_rewards += np.array(curr_rewards)
                 
             # If all done: early stop

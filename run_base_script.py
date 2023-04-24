@@ -35,6 +35,7 @@ def string_to_dict(x):
     return result
 
 parser = argparse.ArgumentParser()
+parser.add_argument("--config_file", default=None, type=str, help="(optional) path to a .json args file. Missing params will be applied by default")
 parser.add_argument("--players", default=5, type=int, help="Number of players involved.")
 parser.add_argument("--field_size", default=15, type=int, help="# of tiles of space lenght. The final game space is a NxN area.")
 parser.add_argument("--sight", default=5, type=int, help="# of tiles of view range. The final view is a KxK area.")
@@ -59,6 +60,9 @@ parser.add_argument("--mutation", default="function-tools.mutUniformInt#low-0#up
 parser.add_argument("--crossover", default="function-tools.cxOnePoint", type=string_to_dict, help="Crossover operator, see Mutation operator. Default: One point")
 parser.add_argument("--selection", default="function-tools.selTournament#tournsize-2", type=string_to_dict, help="Selection operator, see Mutation operator. Default: tournament of size 2")
 parser.add_argument("--stats", default=None, type=str, help="Specific folder to store the stats for an experiment. Default is yyyy-mm-dd-HH-MM.")
+parser.add_argument("--random_init", action="store_true", help="Randomly initializes the leaves in [-1, 1[")
+parser.add_argument("--decay", default=0.99, type=float, help="The decay factor for the epsilon decay (eps_t = eps_0 * decay^t)")
+parser.add_argument("--epsDecay", default=False, type=bool, help="Enable decaying eps leaf")
 
 parser.add_argument("--genotype_len", default=100, type=int, help="Length of the fixed-length genotype")
 parser.add_argument("--low", default=-10, type=float, help="Lower bound for the random initialization of the leaves")
@@ -66,6 +70,13 @@ parser.add_argument("--up", default=10, type=float, help="Upper bound for the ra
 
 # Parse args
 args = parser.parse_args()
+
+# Load from JSON if possible
+if args.config_file:
+    with open(args.config_file, "r") as agsCfgFile:
+        t_args = argparse.Namespace()
+        t_args.__dict__.update(json.load(agsCfgFile))
+        args = parser.parse_args(namespace=t_args)
 
 best = None
 lr = "auto" if args.learning_rate == "auto" else float(args.learning_rate)
@@ -81,6 +92,7 @@ if args.stats:
 else:
     statsdirname = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
 
+
 statsdir = "stats/{}".format(statsdirname)
 if not os.path.exists(statsdir): 
     os.makedirs(statsdir)
@@ -91,6 +103,47 @@ class CLeaf(RandomlyInitializedEpsGreedyLeaf):
     def __init__(self):
         super(CLeaf, self).__init__(args.n_actions, lr, args.df, args.eps, low=args.low, up=args.up)
 
+
+class EpsilonDecayLeaf(RandomlyInitializedEpsGreedyLeaf):
+    """A eps-greedy leaf with epsilon decay."""
+
+    def __init__(self):
+        """
+        Initializes the leaf
+        """
+        if not args.random_init:
+            RandomlyInitializedEpsGreedyLeaf.__init__(
+                self,
+                n_actions=args.n_actions,
+                learning_rate=lr,
+                discount_factor=args.df,
+                epsilon=args.eps,
+                low=0,
+                up=0
+            )
+        else:
+            RandomlyInitializedEpsGreedyLeaf.__init__(
+                self,
+                n_actions=args.n_actions,
+                learning_rate=lr,
+                discount_factor=args.df,
+                epsilon=args.eps,
+                low=-1,
+                up=1
+            )
+
+        self._decay = args.decay
+        self._steps = 0
+
+    def get_action(self):
+        self.epsilon = self.epsilon * self._decay
+        self._steps += 1
+        return super().get_action()
+
+if args.epsDecay:
+    leaf_class = EpsilonDecayLeaf
+else:
+    leaf_class = EpsilonDecayLeaf
 
 # Setup of the grammar
 GRID_SIZE = 1 + args.sight * 2 
@@ -143,15 +196,16 @@ with open(logfile, "a") as f:
 def evaluate_fitness(fitness_function, leaf, genotype, episodes=args.episodes):
     """
         DT instantiation and evaluation
+        One gene, multiple instances (for accurate reward assignment)
     """
     # from genotype => phenotype (DT specs) => build DT agent
     phenotype, _ = GrammaticalEvolutionTranslator(grammar).genotype_to_str(genotype["individual"])
     bt = PythonDT(phenotype, leaf) # object type
-
+    
     return fitness_function(bt, gen=genotype["gen"], episodes=episodes)
 
 
-def fitness(x, gen=None, episodes=args.episodes):
+def fitness(dt, gen=None, episodes=args.episodes):
     """
         Gym Environment Fitness Evaluation
     """
@@ -163,8 +217,6 @@ def fitness(x, gen=None, episodes=args.episodes):
 
     # Load or firstly register the env with the given settings
     env_id = "Foraging-{0}x{0}-{1}p-{2}f{3}-v0".format(args.sight, args.players, args.field_size, "-coop" if args.cooperation else "")
-
-    #print(f"Starting environment:\t {env_id}")
 
     # If the environment does not exist -> registration
     try:
@@ -187,48 +239,46 @@ def fitness(x, gen=None, episodes=args.episodes):
         )
         e = gym.make(env_id)
 
-    try:
-        # for each episode (initial state)
-        for iteration in range(episodes):
+    # for each episode (initial state)
+    for iteration in range(episodes):
 
-            e.seed(iteration)
-            
-            # start & set leaves to none for current DT
-            obs = e.reset()
-            x.new_episode()
+        e.seed(iteration)
+        
+        # start & set leaves to none for current DT
+        obs = e.reset()
+        dt.new_episode()
+        
+        episode_r = 0
 
-            cum_rew = 0
-            action = 0
+        # Cumulative per episode
+        #episode_reward = np.zeros(len(agents))
 
-            # Finite horizon
-            for t in range(args.episode_len):
+        # Finite horizon
+        for t in range(args.episode_len):
 
-                # Each agent acts
-                actions = []
-                for i in range(args.players):
-                    observation = obs[i].reshape(3 * GRID_SIZE * GRID_SIZE) 
-                    action = x(observation) # same agent impersonates all players
-                    action = action if action is not None else 0
-                    actions.append(action)
-
-                obs, rew, done, info = e.step(actions)
-                rew = np.sum(rew)
-
-                x.set_reward(rew)
-                cum_rew += rew
-
-                # If all done: early stop
-                if not (False in done): break
-
+            # Each agent acts
+            actions = []
             for i in range(args.players):
                 observation = obs[i].reshape(3 * GRID_SIZE * GRID_SIZE) 
-                x(observation) # same agent impersonates all players
+                action = dt(observation) # same agent impersonates all players
+                action = action if action is not None else 0
+                actions.append(action)
 
-            global_cumulative_rewards.append(cum_rew)
+            obs, rewards, done, info = e.step(actions)
+            dt.set_reward(np.sum(rewards))
 
-    except Exception as ex:
-        if len(global_cumulative_rewards) == 0:
-            global_cumulative_rewards = -1000
+            # Track episode reward and cumulative players reward
+            episode_r += np.sum(rewards)
+
+            # If all done: early stop
+            if not (False in done): break
+
+        # End of the episode rewards and exploration (from original code)
+        for i in range(args.players):
+                observation = obs[i].reshape(3 * GRID_SIZE * GRID_SIZE) 
+                dt(observation) # same agent impersonates all players
+                
+        global_cumulative_rewards.append(episode_r)
 
     # Store player stats for each generation
     if gen:
@@ -242,11 +292,13 @@ def fitness(x, gen=None, episodes=args.episodes):
     # Close and return results
     e.close()
     fitness = np.mean(global_cumulative_rewards),
-    return fitness, x.leaves
+    
+    # Return avg. cumulative rewards and the best performing agent's leaves?
+    return fitness, dt.leaves
 
 
 def fit_fcn(x):
-    return evaluate_fitness(fitness_function=fitness, leaf=CLeaf, genotype=x)
+    return evaluate_fitness(fitness_function=fitness, leaf=leaf_class, genotype=x)
 
 
 # Workaround for parallel processing on Windows
@@ -262,31 +314,13 @@ if __name__ == '__main__':
     from joblib import parallel_backend
 
     # Storing configuration
-    curr_config = {
-        "max_food": args.food,
-        "field_size": args.field_size,
-        "sight": args.sight,
-        "players": args.players,
-        "learning_rate": args.learning_rate,
-        "df": args.df,
-        "episodes": args.episodes,
-        "lambda_": args.lambda_,
-        "generations": args.generations,
-        "cxp": args.cxp,
-        "mp": args.mp,
-        "eps": args.eps,
-        "crossover": args.crossover,
-        "mutation": args.mutation,
-    }
-
-    # Save settings
     if logdir:
         with open(f"{statsdir}/environment_settings.json", 'w') as outfile:
-            json.dump(curr_config, outfile)
+            json.dump(vars(args), outfile)
 
     # this only works well on UNIX systems
     with parallel_backend("multiprocessing"):
-        pop, log, hof, best_leaves = grammatical_evolution(fit_fcn, statsdir=statsdir, inputs=input_space_size, leaf=CLeaf, individuals=args.lambda_, generations=args.generations, jobs=args.jobs, cx_prob=args.cxp, m_prob=args.mp, logfile=logfile, seed=args.seed, mutation=args.mutation, crossover=args.crossover, initial_len=args.genotype_len, selection=args.selection)
+        pop, log, hof, best_leaves = grammatical_evolution(fit_fcn, statsdir=statsdir, inputs=input_space_size, leaf=leaf_class, individuals=args.lambda_, generations=args.generations, jobs=args.jobs, cx_prob=args.cxp, m_prob=args.mp, logfile=logfile, seed=args.seed, mutation=args.mutation, crossover=args.crossover, initial_len=args.genotype_len, selection=args.selection)
 
     # Log best individual
     with open(logfile, "a") as log_:

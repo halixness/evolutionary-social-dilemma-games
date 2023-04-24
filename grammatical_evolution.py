@@ -165,26 +165,36 @@ def eaSimple(population, toolbox, cxpb, mutpb, ngen, statsdir=None, stats=None,
     """
     logbook = tools.Logbook()
     logbook.header = ['gen', 'nevals'] + (stats.fields if stats else [])
-    best = None
-    best_leaves = None
 
     # Evaluate the individuals with an invalid fitness
     invalid_ind = [ind for ind in population if not ind.fitness.valid]
-    
     eval_invalid_inds = [{"individual": ind, "gen": 0} for ind in invalid_ind]
+
+    # (population_size, fitness/leave)
+    # if fitness: (population_size, players)
     fitnesses = [*toolbox.map(toolbox.evaluate, eval_invalid_inds)]
     
-    leaves = [f[1] for f in fitnesses]
-    fitnesses = [f[0] for f in fitnesses]
+    # Set individuals' fitness to the best player's one
+    for ind, fit in zip(invalid_ind, fitnesses):
+        ind.fitness.values = [np.mean(fit[0][0])]
+    
+    # (population, players, leaves) = 50 x 5 = 250 leaves arrays
+    leaves = np.array([f[1] for f in fitnesses]).flatten()
 
-    for i, (ind, fit) in enumerate(zip(invalid_ind, fitnesses)):
-        ind.fitness.values = fit
-        if logfile is not None and (best is None or best < fit[0]):
-            best = fit[0]
+    # (population, players) = 50 x 5 = 250 fitnesses 
+    fitnesses = np.array(([f[0] for f in fitnesses])).flatten()
+
+    best = None
+    best_leaves = None
+
+    # Take the best leaves over individuals, but also across all players (flattened)
+    for i, fit in enumerate(fitnesses):
+        if logfile is not None and (best is None or best < fit):
+            best = fit
             best_leaves = leaves[i]
             with open(logfile, "a") as log_:
                 log_.write("[{}] New best at generation 0 with fitness {}\n".format(datetime.datetime.now(), fit))
-                log_.write(str(ind) + "\n")
+                # log_.write(str(ind) + "\n")
                 log_.write("Leaves\n")
                 log_.write(str(leaves[i]) + "\n")
 
@@ -213,34 +223,39 @@ def eaSimple(population, toolbox, cxpb, mutpb, ngen, statsdir=None, stats=None,
         eval_invalid_inds = [{"individual": ind, "gen": gen} for ind in invalid_ind]
         fitnesses = [*toolbox.map(toolbox.evaluate, eval_invalid_inds)]
 
-        leaves = [f[1] for f in fitnesses]
-        fitnesses = [f[0] for f in fitnesses]
+        #individuals_w_zeros = np.sum([int(np.sum(fit[0][0]) == 0) for fit in fitnesses])
+        #print(f"Gen: {gen}, zero players: {individuals_w_zeros}")
 
-        for i, (ind, fit) in enumerate(zip(invalid_ind, fitnesses)):
-            ind.fitness.values = fit
-            if logfile is not None and (best is None or best < fit[0]):
-                best = fit[0]
+        # Set individuals' fitness to the best player's one
+        for ind, fit in zip(invalid_ind, fitnesses):
+            ind.fitness.values = [np.mean(fit[0][0])]
+
+        best_ind_idx = np.argmax([np.max(f[0][0]) for f in fitnesses])
+        pop_best_ind = population[best_ind_idx]
+        
+        # (population, players, leaves) = 50 x 5 = 250 leaves arrays
+        leaves = np.array([f[1] for f in fitnesses]).flatten()
+
+        # (population, players) = 50 x 5 = 250 fitnesses 
+        fitnesses = np.array(([f[0] for f in fitnesses])).flatten()
+
+        best = None
+        best_leaves = None
+
+        # Take the best leaves over individuals, but also across all players (flattened)
+        for i, fit in enumerate(fitnesses):
+            if logfile is not None and (best is None or best < fit):
+                best = fit
                 best_leaves = leaves[i]
                 with open(logfile, "a") as log_:
-                    log_.write("[{}] New best at generation {} with fitness {}\n".format(datetime.datetime.now(), gen, fit))
-                    log_.write(str(ind) + "\n")
+                    log_.write("[{}] New best at generation 0 with fitness {}\n".format(datetime.datetime.now(), fit))
+                    # log_.write(str(ind) + "\n")
                     log_.write("Leaves\n")
                     log_.write(str(leaves[i]) + "\n")
 
         # Update the hall of fame with the generated individuals
         if halloffame is not None:
             halloffame.update(offspring)
-        
-        # Store current hof genotype to file
-        if statsdir:
-            gen_hof = {}
-            for i, p in enumerate(halloffame): gen_hof[f"individual_{i}"] = p
-
-            if not os.path.exists(f"{statsdir}/generations/gen_{gen}"): 
-                os.makedirs(f"{statsdir}/generations/gen_{gen}")
-
-            with open(f"{statsdir}/generations/gen_{gen}/hof.json", 'w') as outfile:
-                json.dump(gen_hof, outfile)
 
         # Replace the current population by the offspring
         for o in offspring:
@@ -255,6 +270,17 @@ def eaSimple(population, toolbox, cxpb, mutpb, ngen, statsdir=None, stats=None,
         if verbose:
             print(logbook.stream)
 
+        # Store the best individual from the last gen from max players' performance
+        if statsdir:
+            best_ind = {}
+            best_ind["individual_0"] = pop_best_ind
+
+            if not os.path.exists(f"{statsdir}/generations/gen_{gen}"): 
+                os.makedirs(f"{statsdir}/generations/gen_{gen}")
+
+            with open(f"{statsdir}/generations/gen_{gen}/hof.json", 'w') as outfile:
+                json.dump(best_ind, outfile)
+
         # Compute population stats
         diversity = np.sum(
             distance_matrix(np.array(population), np.array(population)).flatten()
@@ -268,6 +294,7 @@ def eaSimple(population, toolbox, cxpb, mutpb, ngen, statsdir=None, stats=None,
         ax.set_xlabel("generation")
         ax.set_ylabel("avg. fitness")
         ax.plot(list(range(len(stats_fitness))), stats_fitness)
+        #ax.set_xlim(0, ngen)
         ax.grid()
         fig.savefig(f"{statsdir}/fitness.png")
         plt.close(fig)
@@ -277,6 +304,7 @@ def eaSimple(population, toolbox, cxpb, mutpb, ngen, statsdir=None, stats=None,
         ax.set_xlabel("generation")
         ax.set_ylabel("Diversity")
         ax.plot(list(range(len(diversities))), diversities)
+        #ax.set_xlim(0, ngen)
         ax.grid()
         fig.savefig(f"{statsdir}/diversity.png")
         plt.close(fig)
