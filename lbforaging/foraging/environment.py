@@ -95,6 +95,7 @@ class ForagingEnv(Env):
         normalize_reward=True,
         grid_observation=False,
         penalty=0.0,
+        collab_encouragement=1
     ):
         self.logger = logging.getLogger(__name__)
         self.seed()
@@ -103,6 +104,7 @@ class ForagingEnv(Env):
         self.field = np.zeros(field_size, np.int32)
 
         self.penalty = penalty
+        self.collab_encouragement = collab_encouragement
         
         self.max_food = max_food
         self._food_spawned = 0.0
@@ -574,7 +576,11 @@ class ForagingEnv(Env):
                 if self._normalize_reward:
                     a.reward = a.reward / float(
                         adj_player_level * self._food_spawned
-                    )  # normalize reward by: total player levels and total food levels
+                    ) # normalize reward by: total player levels and total food levels
+                    
+                # Encourage collaborative behavior
+                if len(adj_players) > 1:
+                    a.reward *= self.collab_encouragement
 
             # log the event for statistics
             player.store_load_action(

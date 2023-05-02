@@ -223,9 +223,6 @@ def eaSimple(population, toolbox, cxpb, mutpb, ngen, statsdir=None, stats=None,
         eval_invalid_inds = [{"individual": ind, "gen": gen} for ind in invalid_ind]
         fitnesses = [*toolbox.map(toolbox.evaluate, eval_invalid_inds)]
 
-        #individuals_w_zeros = np.sum([int(np.sum(fit[0][0]) == 0) for fit in fitnesses])
-        #print(f"Gen: {gen}, zero players: {individuals_w_zeros}")
-
         # Set individuals' fitness to the best player's one
         for ind, fit in zip(invalid_ind, fitnesses):
             ind.fitness.values = [np.mean(fit[0][0])]
@@ -272,14 +269,17 @@ def eaSimple(population, toolbox, cxpb, mutpb, ngen, statsdir=None, stats=None,
 
         # Store the best individual from the last gen from max players' performance
         if statsdir:
-            best_ind = {}
-            best_ind["individual_0"] = pop_best_ind
+            try:
+                best_ind = {}
+                best_ind["individual_0"] = pop_best_ind
 
-            if not os.path.exists(f"{statsdir}/generations/gen_{gen}"): 
-                os.makedirs(f"{statsdir}/generations/gen_{gen}")
+                if not os.path.exists(f"{statsdir}/generations/gen_{gen}"): 
+                    os.makedirs(f"{statsdir}/generations/gen_{gen}")
 
-            with open(f"{statsdir}/generations/gen_{gen}/hof.json", 'w') as outfile:
-                json.dump(best_ind, outfile)
+                with open(f"{statsdir}/generations/gen_{gen}/hof.json", 'w') as outfile:
+                    json.dump(best_ind, outfile)
+            except:
+                print(f"[!!!] Could not store best individual for gen: {gen}")
 
         # Compute population stats
         diversity = np.sum(

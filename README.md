@@ -117,7 +117,7 @@ Parameters:
 ### Testing
 To visualize the behavior of evolved agents in game sessions: 
 ```
-    python evaluate.py --config config.json --genome stats/exp1_24_04_23/generations/gen_35/hof.json
+    python evaluate.py --config config.json --genome stats/competitive6_29_04_23/generations/gen_36/hof.json
 ```
 
 ### Papers

@@ -69,6 +69,7 @@ class EpsilonDecayLeaf(RandomlyInitializedEpsGreedyLeaf):
 # ----------------------------------
 
 parser = argparse.ArgumentParser()
+
 parser.add_argument("--config_file", default=None, type=str, help="(optional) path to a .json args file. Missing params will be applied by default")
 parser.add_argument("--players", default=5, type=int, help="Number of players involved.")
 parser.add_argument("--field_size", default=15, type=int, help="# of tiles of space lenght. The final game space is a NxN area.")
@@ -77,6 +78,9 @@ parser.add_argument("--food", default=1, type=int, help="Max # of food laid on t
 parser.add_argument("--cooperation", default=False, type=bool, help="Force players cooperation.")
 parser.add_argument("--grid", default=True, type=bool, help="Use the grid observation space.")
 parser.add_argument("--max_player_level", default=5, type=int, help="Max achievable player (and food?) level")
+parser.add_argument("--encouragement", default=1, type=int, help="Reward multiplier for collaborative collects")
+parser.add_argument("--time_penalty", default=0, type=int, help="Subtract some reward score along timesteps")
+parser.add_argument("--normalize_reward", default=False, type=bool, help="Normalize rewards by players and food no.")
 
 parser.add_argument("--jobs", default=1, type=int, help="The number of jobs to use for the evolution")
 parser.add_argument("--seed", default=0, type=int, help="Random seed")
@@ -177,6 +181,7 @@ def get_oblique_split_grammar(input_types):
         "if": ["if <condition>:{<action>}else:{<action>}"],
         "action": ["out=_leaf;leaf=\"_leaf\"", "<if>"],
         # "const": ["0", "<nz_const>"],
+        # there is an issue here with some zero divide
         "const": [str(k/1000) for k in range(-args.constant_range,args.constant_range+1,args.constant_step)]
     }
 
@@ -271,7 +276,9 @@ def fitness(agents, gen=None, episodes=args.episodes):
                 "sight": args.sight,
                 "max_episode_steps": args.episode_len,
                 "force_coop": args.cooperation,
-                "grid_observation": args.grid
+                "grid_observation": args.grid,
+                "collab_encouragement": args.encouragement,
+                "normalize_reward": args.normalize_reward
             },
         )
         e = gym.make(env_id)
@@ -302,6 +309,10 @@ def fitness(agents, gen=None, episodes=args.episodes):
                 actions.append(action)
 
             obs, rewards, done, info = e.step(actions)
+
+            # Time penalty (if set!)
+            rewards -= np.ones_like(rewards) * ((t * args.time_penalty) / args.episode_len)
+
             for i, r in enumerate(rewards): agents[i].set_reward(r)
 
             # Track episode reward and cumulative players reward
@@ -328,13 +339,16 @@ def fitness(agents, gen=None, episodes=args.episodes):
 
     # Store player stats for each generation
     if gen:
-        if not os.path.exists(f"{statsdir}/generations/gen_{gen}"):
-            os.makedirs(f"{statsdir}/generations/gen_{gen}")
+        try:
+            if not os.path.exists(f"{statsdir}/generations/gen_{gen}"):
+                os.makedirs(f"{statsdir}/generations/gen_{gen}")
 
-        for i, p in enumerate(e.players):
-            with open(f"{statsdir}/generations/gen_{gen}/player_{i}_stats.json", 'a') as outfile:
-                    outfile.write(f"{json.dumps(p.stat_load_history)}\n")
-            
+            for i, p in enumerate(e.players):
+                with open(f"{statsdir}/generations/gen_{gen}/player_{i}_stats.json", 'a') as outfile:
+                        outfile.write(f"{json.dumps(p.stat_load_history)}\n")
+        except:
+            print(f"[!] Error in storing stats for player {i}, gen {gen}")
+
     # Close and return results
     e.close()
     fitness = np.mean(global_cumulative_rewards, axis=0),

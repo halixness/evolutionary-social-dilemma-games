@@ -88,7 +88,7 @@ lr = "auto" if args.learning_rate == "auto" else float(args.learning_rate)
 # Creation of an ad-hoc Leaf class
 class CLeaf(RandomlyInitializedEpsGreedyLeaf):
     def __init__(self):
-        super(CLeaf, self).__init__(args.n_actions, lr, args.df, args.eps, low=args.low, up=args.up)
+        super(CLeaf, self).__init__(args.n_actions, lr, args.df, 0, low=args.low, up=args.up)
 
 class ListWithParents(list):
     """
@@ -187,8 +187,8 @@ def visualize_one_run(genome):
             for i in range(args.players):
                 obs = observations[i].reshape(3 * GRID_SIZE * GRID_SIZE) 
 
-                if i == 0: 
-                    print(observations[0][0])
+                #if i == 0: 
+                #    print(observations[0][0])
                 
                 if args.multitree:
                     action = agents[i](obs)
@@ -201,7 +201,7 @@ def visualize_one_run(genome):
             # Update game state
             observations, curr_rewards, done, info = env.step(actions)
 
-            print(curr_rewards)
+            print(actions, curr_rewards)
             print("-------------")
 
             if args.multitree:
