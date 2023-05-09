@@ -176,7 +176,7 @@ def eaSimple(population, toolbox, cxpb, mutpb, ngen, statsdir=None, stats=None,
     
     # Set individuals' fitness to the best player's one
     for ind, fit in zip(invalid_ind, fitnesses):
-        ind.fitness.values = [np.mean(fit[0][0])]
+        ind.fitness.values = [np.sum(fit[0][0])]
     
     # (population, players, leaves) = 50 x 5 = 250 leaves arrays
     leaves = np.array([f[1] for f in fitnesses]).flatten()
@@ -225,7 +225,7 @@ def eaSimple(population, toolbox, cxpb, mutpb, ngen, statsdir=None, stats=None,
 
         # Set individuals' fitness to the best player's one
         for ind, fit in zip(invalid_ind, fitnesses):
-            ind.fitness.values = [np.mean(fit[0][0])]
+            ind.fitness.values = [np.sum(fit[0][0])]
 
         best_ind_idx = np.argmax([np.max(f[0][0]) for f in fitnesses])
         pop_best_ind = population[best_ind_idx]
@@ -308,6 +308,129 @@ def eaSimple(population, toolbox, cxpb, mutpb, ngen, statsdir=None, stats=None,
         ax.grid()
         fig.savefig(f"{statsdir}/diversity.png")
         plt.close(fig)
+        
+    return population, logbook, best_leaves
+
+
+def eaArena(population, toolbox, cxpb, mutpb, ngen, episodes, statsdir=None, stats=None,
+             halloffame=None, verbose=__debug__, logfile=None, var=varAnd):
+
+    logbook = tools.Logbook()
+    logbook.header = ['gen', 'nevals'] + (stats.fields if stats else [])
+
+    # Evaluate the individuals with an invalid fitness
+    invalid_ind = [ind for ind in population if not ind.fitness.valid]
+    eval_invalid_inds = [[{"individual": ind, "gen": 0, "episode": e} for ind in invalid_ind] for e in range(episodes)]
+
+    # Parallelize episode-wise
+    fitnesses = np.mean(
+        [*toolbox.map(toolbox.evaluate, eval_invalid_inds)], 
+        axis=0
+    )
+    
+    # Set individuals' fitness to the best player's one
+    for ind, fit in zip(invalid_ind, fitnesses):
+        ind.fitness.values = [fit]
+
+    if halloffame is not None:
+        halloffame.update(population)
+
+    record = stats.compile(population) if stats else {}
+    logbook.record(gen=0, nevals=len(invalid_ind), **record)
+
+    if verbose:
+        print(logbook.stream)
+
+    # Begin the generational process
+    stats_fitness = []
+    diversities = []
+    for gen in range(1, ngen + 1):
+
+        # Select the next generation individuals
+        offspring = toolbox.select(population, len(population))
+
+        # Vary the pool of individuals
+        offspring = var(offspring, toolbox, cxpb, mutpb)
+
+        # Evaluate the individuals with an invalid fitness
+        invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
+        eval_invalid_inds = [[{"individual": ind, "gen": 0, "episode": e} for ind in invalid_ind] for e in range(episodes)]
+
+        # Parallelize episode-wise
+        fitnesses = np.mean(
+            [*toolbox.map(toolbox.evaluate, eval_invalid_inds)], 
+            axis=0
+        )
+    
+        # Set individuals' fitness to the best player's one
+        for ind, fit in zip(invalid_ind, fitnesses):
+            ind.fitness.values = [fit]
+
+        # Update the hall of fame with the generated individuals
+        if halloffame is not None:
+            halloffame.update(offspring)
+
+        # Replace the current population by the offspring
+        for o in offspring:
+            argmin = np.argmin(map(lambda x: population[x].fitness.values[0], o.parents))
+
+            if o.fitness.values[0] > population[o.parents[argmin]].fitness.values[0]:
+                population[o.parents[argmin]] = o
+
+        # Append the current generation statistics to the logbook
+        record = stats.compile(population) if stats else {}
+        logbook.record(gen=gen, nevals=len(invalid_ind), **record)
+        if verbose:
+            print(logbook.stream)
+
+        # Store the best individual from the last gen from max players' performance
+        if statsdir:
+            try:
+                best_ind = {}
+                
+                # Descending order by fitness
+                sorted_pop = sorted(zip(population, fitnesses), key=lambda x: x[1], reverse=True)
+                
+                for i, individual in enumerate(sorted_pop):
+                    best_ind[f"individual_{i}"] = individual[0]
+
+                if not os.path.exists(f"{statsdir}/generations/gen_{gen}"): 
+                    os.makedirs(f"{statsdir}/generations/gen_{gen}")
+
+                with open(f"{statsdir}/generations/gen_{gen}/hof.json", 'w') as outfile:
+                    json.dump(best_ind, outfile)
+            except:
+                print(f"[!!!] Could not store best individual for gen: {gen}")
+
+        # Compute population stats
+        diversity = np.sum(
+            distance_matrix(np.array(population), np.array(population)).flatten()
+        )
+        diversities.append(diversity)
+
+        # Save a plot of statistics
+        stats_fitness.append(np.mean([ind.fitness.values[0] for ind in population]))
+
+        fig, ax = plt.subplots()
+        ax.set_xlabel("generation")
+        ax.set_ylabel("avg. fitness")
+        ax.plot(list(range(len(stats_fitness))), stats_fitness)
+        #ax.set_xlim(0, ngen)
+        ax.grid()
+        fig.savefig(f"{statsdir}/fitness.png")
+        plt.close(fig)
+
+        # Save a plot of diversity
+        fig, ax = plt.subplots()
+        ax.set_xlabel("generation")
+        ax.set_ylabel("Diversity")
+        ax.plot(list(range(len(diversities))), diversities)
+        #ax.set_xlim(0, ngen)
+        ax.grid()
+        fig.savefig(f"{statsdir}/diversity.png")
+        plt.close(fig)
+
+        best_leaves = []
         
     return population, logbook, best_leaves
 
@@ -427,7 +550,7 @@ def ge_mutate(ind, attribute):
     return ind,
 
 
-def grammatical_evolution(fitness_function, inputs, leaf, individuals, generations, cx_prob, m_prob, statsdir=None, initial_len=100, selection={'function': "tools.selBest"}, mutation={'function': "ge_mutate", 'attribute': None}, crossover={'function': "ge_mate", 'individual': None}, seed=0, jobs=1, logfile=None, timeout=10*60):
+def grammatical_evolution(fitness_function, inputs, leaf, individuals, generations, cx_prob, m_prob, episodes=None, multi_genes=False, statsdir=None, initial_len=100, selection={'function': "tools.selBest"}, mutation={'function': "ge_mutate", 'attribute': None}, crossover={'function': "ge_mate", 'individual': None}, seed=0, jobs=1, logfile=None, timeout=10*60):
     random.seed(seed)
     np.random.seed(seed)
 
@@ -466,7 +589,11 @@ def grammatical_evolution(fitness_function, inputs, leaf, individuals, generatio
     stats.register("min", np.min)
     stats.register("max", np.max)
     
-    pop, log, best_leaves = eaSimple(pop, toolbox, statsdir=statsdir, cxpb=cx_prob, mutpb=m_prob, ngen=generations, 
+    if multi_genes:
+        pop, log, best_leaves = eaArena(pop, toolbox, episodes=episodes, statsdir=statsdir, cxpb=cx_prob, mutpb=m_prob, ngen=generations, 
+                                   stats=stats, halloffame=hof, verbose=True, logfile=logfile)
+    else:    
+        pop, log, best_leaves = eaSimple(pop, toolbox, statsdir=statsdir, cxpb=cx_prob, mutpb=m_prob, ngen=generations, 
                                    stats=stats, halloffame=hof, verbose=True, logfile=logfile)
     
     return pop, log, hof, best_leaves

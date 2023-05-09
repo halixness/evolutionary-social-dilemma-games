@@ -7,6 +7,7 @@ import argparse
 import lbforaging
 import subprocess
 import numpy as np
+from tqdm import tqdm
 from numpy import random
 from time import time, sleep
 from gym.envs.registration import register
@@ -14,6 +15,8 @@ from gym.envs.registration import register
 from src.utils import string_to_dict
 from dt import EpsGreedyLeaf, PythonDT, RandomlyInitializedEpsGreedyLeaf
 from grammatical_evolution import GrammaticalEvolutionTranslator, grammatical_evolution, differential_evolution
+import skimage.measure
+import random
 
 
 # ------------------------------------------------------------------
@@ -71,9 +74,9 @@ class EpsilonDecayLeaf(RandomlyInitializedEpsGreedyLeaf):
 parser = argparse.ArgumentParser()
 
 parser.add_argument("--config_file", default=None, type=str, help="(optional) path to a .json args file. Missing params will be applied by default")
-parser.add_argument("--players", default=5, type=int, help="Number of players involved.")
 parser.add_argument("--field_size", default=15, type=int, help="# of tiles of space lenght. The final game space is a NxN area.")
 parser.add_argument("--sight", default=1, type=int, help="# of tiles of view range. The final view is a KxK area.")
+parser.add_argument("--sight_downsampling", default=None, type=int, help="Sight downsampling (pooling) factor")
 parser.add_argument("--food", default=1, type=int, help="Max # of food laid on the ground.")
 parser.add_argument("--cooperation", default=False, type=bool, help="Force players cooperation.")
 parser.add_argument("--grid", default=True, type=bool, help="Use the grid observation space.")
@@ -167,6 +170,7 @@ def get_orthogonal_split_grammar(input_types):
     return grammar
 
 def get_oblique_split_grammar(input_types):
+
     consts = {}
 
     for index, input_var in enumerate(input_types):
@@ -181,8 +185,7 @@ def get_oblique_split_grammar(input_types):
         "if": ["if <condition>:{<action>}else:{<action>}"],
         "action": ["out=_leaf;leaf=\"_leaf\"", "<if>"],
         # "const": ["0", "<nz_const>"],
-        # there is an issue here with some zero divide
-        "const": [str(k/1000) for k in range(-args.constant_range,args.constant_range+1,args.constant_step)]
+        "const": [str(k/1000) for k in range(-args.constant_range, args.constant_range+1, args.constant_step)]
     }
 
     if not args.with_bias:
@@ -193,7 +196,11 @@ def get_oblique_split_grammar(input_types):
     return grammar
 
 # Setup of the grammar
-GRID_SIZE = 1 + args.sight * 2 
+if args.sight_downsampling: 
+    GRID_SIZE = (2 + args.sight * 2) // args.sight_downsampling
+else: 
+    GRID_SIZE = (1 + args.sight * 2)
+
 N_INPUT_VARIABLES = 3 * GRID_SIZE * GRID_SIZE # for each player
 
 input_space_size = N_INPUT_VARIABLES
@@ -213,6 +220,8 @@ input_types = [AGENT_MIN, AGENT_MAX, STEP, DIVISOR] * (GRID_SIZE * GRID_SIZE) + 
 input_types = np.array(input_types).reshape(3 * GRID_SIZE * GRID_SIZE, 4)
 
 grammar = get_orthogonal_split_grammar(input_types)
+#grammar = get_oblique_split_grammar(input_types)
+
 
 # print(f"Grammar len:\t{len(grammar.keys())}")
 
@@ -232,30 +241,32 @@ with open(logfile, "a") as f:
         f.write("{}: {}\n".format(k, v))
 
 # Definition of the fitness evaluation function
-def evaluate_fitness(fitness_function, leaf, genotype, episodes=args.episodes):
+def evaluate_fitness(fitness_function, leaf, genes, episodes=args.episodes):
     """
         DT instantiation and evaluation
         One gene, multiple instances (for accurate reward assignment)
     """
     agents = []
-    for p in range(args.players):
-        # from genotype => phenotype (DT specs) => build DT agent
-        phenotype, _ = GrammaticalEvolutionTranslator(grammar).genotype_to_str(genotype["individual"])
+    for gene in genes:
+        phenotype, _ = GrammaticalEvolutionTranslator(grammar).genotype_to_str(gene["individual"])
         bt = PythonDT(phenotype, leaf) # object type
         agents.append(bt)
 
-    return fitness_function(agents, gen=genotype["gen"], episodes=episodes)
+    """
+    for i in range(args.players):
+        gene = genes[i % len(genes)] # rotating gene across players
+        phenotype, _ = GrammaticalEvolutionTranslator(grammar).genotype_to_str(gene["individual"])
+        bt = PythonDT(phenotype, leaf) # object type
+        agents.append(bt)
+    """
+
+    return fitness_function(agents, gen=gene["gen"], episodes=episodes)
 
 
-def fitness(agents, gen=None, episodes=args.episodes):
+def episode_parallel_fitness(agents, gen=None, episodes=args.episodes):
     """
         Gym Environment Fitness Evaluation
     """
-    
-    # initialize random and rewards
-    random.seed(args.seed)
-    np.random.seed(args.seed)
-    global_cumulative_rewards = []
 
     # Load or firstly register the env with the given settings
     env_id = "Foraging-{0}x{0}-{1}p-{2}f{3}-v0".format(args.sight, args.players, args.field_size, "-coop" if args.cooperation else "")
@@ -283,55 +294,64 @@ def fitness(agents, gen=None, episodes=args.episodes):
         )
         e = gym.make(env_id)
 
-    # for each episode (initial state)
-    for iteration in range(episodes):
+    # start & set leaves to none for current DT
+    e.seed(gen)
+    obs = e.reset()
+    for agent in agents: agent.new_episode()
+    
+    # Select some genes to play
+    ep_cumulative_rewards = np.zeros(args.lambda_)
+    players_idx = random.choices(list(range(args.lambda_)), k = args.players)
 
-        e.seed(iteration)
-        
-        # start & set leaves to none for current DT
-        obs = e.reset()
-        for agent in agents: agent.new_episode()
-        
-        ep_cumulative_rewards = np.zeros(args.players)
+    # Finite horizon
+    for t in range(args.episode_len):
 
-        # Cumulative per episode
-        #episode_reward = np.zeros(len(agents))
+        # Each agent acts
+        actions = []
+        for i, player_idx in enumerate(players_idx):
+            
+            # Downsampling if applies
+            if args.sight_downsampling:
+                obs_i = np.stack(
+                    [skimage.measure.block_reduce(channel, (args.sight_downsampling, args.sight_downsampling), np.max) for channel in obs[i]]
+                )
+            else: 
+                obs_i = obs[i]
 
-        # Finite horizon
-        for t in range(args.episode_len):
+            observation = obs_i.reshape(3 * GRID_SIZE * GRID_SIZE) 
 
-            # Each agent acts
-            actions = []
-            for i, agent in enumerate(agents):
-                observation = obs[i].reshape(3 * GRID_SIZE * GRID_SIZE) 
-                action = agent(observation) # same agent impersonates all players
-                action = action if action is not None else 0
-                actions.append(action)
+            action = agents[player_idx](observation) # same agent impersonates all players
+            action = action if action is not None else 0
+            actions.append(action)
 
-            obs, rewards, done, info = e.step(actions)
+        obs, rewards, done, info = e.step(actions)
 
-            # Time penalty (if set!)
-            rewards -= np.ones_like(rewards) * ((t * args.time_penalty) / args.episode_len)
+        # Time penalty (if set!)
+        rewards -= np.ones_like(rewards) * ((t * args.time_penalty) / args.episode_len)
 
-            for i, r in enumerate(rewards): agents[i].set_reward(r)
+        # Set & accumulate rewards
+        for i, player_idx in enumerate(players_idx): agents[player_idx].set_reward(rewards[i])
 
-            # Track episode reward and cumulative players reward
-            # min: push the minimum player performance
-            # mean: improve collective performance
-            # sum: similar
-            # max: push fittest players' performance 
-            ep_cumulative_rewards += rewards
+        for i, player_idx in enumerate(players_idx):
+            ep_cumulative_rewards[player_idx] += rewards[i]
 
-            # If all done: early stop
-            if not (False in done): break
+        # If all done: early stop
+        if not (False in done): break
 
-        # End of the episode rewards and exploration (from original code)
-        for i, agent in enumerate(agents):
-                observation = obs[i].reshape(3 * GRID_SIZE * GRID_SIZE) 
-                agent(observation) # same agent impersonates all players
-                
-                
-        global_cumulative_rewards.append(ep_cumulative_rewards)
+    # End of the episode rewards and exploration (from original code)
+    for i, player_idx in enumerate(players_idx):
+            
+            # Downsampling if applies
+            if args.sight_downsampling:
+                obs_i = np.stack(
+                    [skimage.measure.block_reduce(channel, (args.sight_downsampling, args.sight_downsampling), np.max) for channel in obs[i]]
+                )
+            else: 
+                obs_i = obs[i]
+
+            observation = obs_i.reshape(3 * GRID_SIZE * GRID_SIZE) 
+            agents[player_idx](observation) # same agent impersonates all players
+
 
     # Store player stats for each generation
     if gen:
@@ -345,18 +365,14 @@ def fitness(agents, gen=None, episodes=args.episodes):
         except:
             print(f"[!] Error in storing stats for player {i}, gen {gen}")
 
-    # Close and return results
     e.close()
-    fitness = np.mean(global_cumulative_rewards, axis=0),
-    # best_leaves_idx = np.argmax(np.mean(global_cumulative_rewards, axis=0))[0]
-    # best_leaves = [dt.leaves for dt in agents][best_leaves_idx]
 
     # multiple fitnesses and multiple leaves
-    return fitness, [dt.leaves for dt in agents]
+    return ep_cumulative_rewards
 
 
-def fit_fcn(x):
-    return evaluate_fitness(fitness_function=fitness, leaf=leaf_class, genotype=x)
+def fit_fcn(Xs):
+    return evaluate_fitness(fitness_function=episode_parallel_fitness, leaf=leaf_class, genes=Xs)
 
 # ------------------------------------------------------------------
 #                   Script exec
@@ -381,7 +397,7 @@ if __name__ == '__main__':
 
     # this only works well on UNIX systems
     with parallel_backend("multiprocessing"):
-        pop, log, hof, best_leaves = grammatical_evolution(fit_fcn, statsdir=statsdir, inputs=input_space_size, leaf=leaf_class, individuals=args.lambda_, generations=args.generations, jobs=args.jobs, cx_prob=args.cxp, m_prob=args.mp, logfile=logfile, seed=args.seed, mutation=args.mutation, crossover=args.crossover, initial_len=args.genotype_len, selection=args.selection)
+        pop, log, hof, best_leaves = grammatical_evolution(fit_fcn, episodes=args.episodes, multi_genes=True, statsdir=statsdir, inputs=input_space_size, leaf=leaf_class, individuals=args.lambda_, generations=args.generations, jobs=args.jobs, cx_prob=args.cxp, m_prob=args.mp, logfile=logfile, seed=args.seed, mutation=args.mutation, crossover=args.crossover, initial_len=args.genotype_len, selection=args.selection)
 
     # Log best individual
     with open(logfile, "a") as log_:

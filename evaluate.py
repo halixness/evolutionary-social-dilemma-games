@@ -13,6 +13,7 @@ from grammatical_evolution import GrammaticalEvolutionTranslator
 
 import json
 import argparse
+import skimage.measure
 
 def string_to_dict(x):
     """
@@ -42,6 +43,8 @@ parser.add_argument("--genome", default="last_gen_hof.json", type=str, help="JSO
 parser.add_argument("--players", default=5, type=int, help="Number of players involved.")
 parser.add_argument("--field_size", default=15, type=int, help="# of tiles of space lenght. The final game space is a NxN area.")
 parser.add_argument("--sight", default=5, type=int, help="# of tiles of view range. The final view is a KxK area.")
+parser.add_argument("--sight_downsampling", default=None, type=int, help="Sight downsampling (pooling) factor")
+parser.add_argument("--pool_operator", default="mean", type=str, help="Pooling operator: mean, min")
 parser.add_argument("--food", default=1, type=int, help="Max # of food laid on the ground.")
 parser.add_argument("--cooperation", default=False, type=bool, help="Force players cooperation.")
 parser.add_argument("--grid", default=True, type=bool, help="Use the grid observation space.")
@@ -61,6 +64,13 @@ parser.add_argument("--up", default=10, type=float, help="Upper bound for the ra
 
 args = parser.parse_args()
 
+if args.pool_operator == "mean": 
+    pool_operator = np.mean
+elif args.pool_operator == "max": 
+    pool_operator = np.max
+
+DEFAULT_EPSILON = 0.3
+
 # Load from JSON if possible
 if args.config_file:
     with open(args.config_file, "r") as agsCfgFile:
@@ -77,7 +87,7 @@ np.random.seed(args.seed)
 S_ACTIONS = ["NONE", "NORTH", "SOUTH", "WEST", "EAST", "LOAD"]
 MAX_STEPS = 1000
 N_EPISODES = 50
-refresh_time = 0.5
+refresh_time = 0.1
 
 lr = "auto" if args.learning_rate == "auto" else float(args.learning_rate)
 
@@ -88,7 +98,7 @@ lr = "auto" if args.learning_rate == "auto" else float(args.learning_rate)
 # Creation of an ad-hoc Leaf class
 class CLeaf(RandomlyInitializedEpsGreedyLeaf):
     def __init__(self):
-        super(CLeaf, self).__init__(args.n_actions, lr, args.df, 0, low=args.low, up=args.up)
+        super(CLeaf, self).__init__(args.n_actions, lr, args.df, DEFAULT_EPSILON, low=args.low, up=args.up)
 
 class ListWithParents(list):
     """
@@ -101,8 +111,14 @@ class ListWithParents(list):
 # ------------------------------------------------------------------
 #                   DEFINING THE GRAMMAR
 # ------------------------------------------------------------------
-GRID_SIZE = 1 + args.sight * 2 
-N_INPUT_VARIABLES = 3 * GRID_SIZE * GRID_SIZE # for each player
+
+# Setup of the grammar
+if args.sight_downsampling: 
+    GRID_SIZE = (2 + args.sight * 2) // args.sight_downsampling
+else: 
+    GRID_SIZE = (1 + args.sight * 2)
+
+N_INPUT_VARIABLES = 2 * GRID_SIZE * GRID_SIZE # for each player
 
 input_space_size = N_INPUT_VARIABLES
 
@@ -185,21 +201,32 @@ def visualize_one_run(genome):
             # Each agent acts
             actions = []
             for i in range(args.players):
-                obs = observations[i].reshape(3 * GRID_SIZE * GRID_SIZE) 
 
-                #if i == 0: 
-                #    print(observations[0][0])
+                # Downsampling if applies
+                if args.sight_downsampling:
+                    obs_i = np.stack(
+                        [skimage.measure.block_reduce(channel, (args.sight_downsampling, args.sight_downsampling), np.max) for channel in observations[i][:2]]
+                    )
+                else: 
+                    obs_i = observations[i][:2]
+
+                if i == 0:
+                    print(obs_i)
+
+                obs_i = obs_i.reshape(2 * GRID_SIZE * GRID_SIZE) 
                 
                 if args.multitree:
-                    action = agents[i](obs)
+                    action = agents[i](obs_i)
                 else:
-                    action = agent(obs)
+                    action = agent(obs_i)
                 
                 #action = action if action is not None else 0
                 actions.append(action)
 
             # Update game state
             observations, curr_rewards, done, info = env.step(actions)
+
+            curr_rewards -= np.ones_like(curr_rewards) * (args.time_penalty)
 
             print(actions, curr_rewards)
             print("-------------")

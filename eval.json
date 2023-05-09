@@ -1,28 +1,23 @@
 {
-    "stats": "arena11_higherMXP_MoreEPs",
-    "encouragement": 2,
     "normalize_reward": false,
-    "time_penalty": 0.6,
-    "field_size": 10,
+    "eps": 0.1,
+    "field_size": 5,
     "sight": 3,
+    "time_penalty": 0.3,
     "sight_downsampling": 2,
-    "pool_operator": "mean",
-    "food": 15,
-    "lambda_": 50,
+    "food": 2,
+    "players": 5,
     "cooperation": false,
     "grid": true,
     "max_player_level": 5,
     "jobs": 16,
     "seed": 42,
+    "multitree": true,
     "n_actions": 6,
     "learning_rate": "auto",
-    "episodes": 1000,
+    "episodes": 100,
     "episode_len": 1000,
-    "generations": 100,
-    "epsDecay": true,
-    "df": 0.8,
-    "eps": 1,
-    "decay": 0.991,
+    "generations": 1000,
     "genotype_len": 300,
     "cxp": 0.3,
     "mp": 1,
@@ -30,20 +25,16 @@
         "function": "tools.mutUniformInt",
         "low": 0,
         "up": 40000,
-        "indpb": 0.4
+        "indpb": 0.8
     },
     "crossover": {
         "function": "tools.cxOnePoint"
     },
     "selection": {
         "function": "tools.selTournament",
-        "tournsize": 2
+        "tournsize": 3
     },
     "random_init": false,
     "low": -1,
-    "up": 1,
-    "config_file": "config.json",
-    "constant_range": 1000,
-    "constant_step": 1,
-    "with_bias": false
+    "up": 1
 }
