@@ -15,6 +15,8 @@ import json
 import argparse
 import skimage.measure
 
+import random
+
 def string_to_dict(x):
     """
     This function splits a string into a dict.
@@ -171,10 +173,18 @@ def visualize_one_run(genome):
     """
 
     if args.multitree:
+
+        population = [x for x in genome.values()]
+
+        # Random population sample
+        if args.players < len(population):
+            selected_sample = random.choices(population, k = args.players)
+        else: 
+            selected_sample = population
+
         agents = []
-        for p in range(args.players):
-            # from genotype => phenotype (DT specs) => build DT agent
-            phenotype, _ = GrammaticalEvolutionTranslator(grammar).genotype_to_str(genome)
+        for ind in selected_sample:
+            phenotype, _ = GrammaticalEvolutionTranslator(grammar).genotype_to_str(ind)
             agent = PythonDT(phenotype, CLeaf) # object type
             agents.append(agent)
     else:
@@ -210,8 +220,7 @@ def visualize_one_run(genome):
                 else: 
                     obs_i = observations[i][:2]
 
-                if i == 0:
-                    print(obs_i)
+                # if i == 0: print(obs_i)
 
                 obs_i = obs_i.reshape(2 * GRID_SIZE * GRID_SIZE) 
                 
@@ -219,6 +228,8 @@ def visualize_one_run(genome):
                     action = agents[i](obs_i)
                 else:
                     action = agent(obs_i)
+
+                if action is None: action = 0
                 
                 #action = action if action is not None else 0
                 actions.append(action)
@@ -228,13 +239,14 @@ def visualize_one_run(genome):
 
             curr_rewards -= np.ones_like(curr_rewards) * (args.time_penalty)
 
-            print(actions, curr_rewards)
-            print("-------------")
+            #print(actions, curr_rewards)
+            #print("-------------")
 
             if args.multitree:
                 for i, r in enumerate(curr_rewards): agents[i].set_reward(r)
             else:
                 agent.set_reward(np.sum(curr_rewards))
+
             episode_rewards += np.array(curr_rewards)
                 
             # If all done: early stop
@@ -274,7 +286,7 @@ if __name__ == "__main__":
     with open(args.genome) as json_file:
 
         # Read the first individual's genome
-        genome = list(json.load(json_file).values())[0]
+        genome = json.load(json_file)
         visualize_one_run(genome)
 
     env.close()

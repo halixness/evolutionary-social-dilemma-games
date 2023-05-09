@@ -159,26 +159,14 @@ else:
 #                   DEFINING THE GRAMMAR
 # ------------------------------------------------------------------
 
-def get_orthogonal_split_grammar(input_types):
-    grammar = {
-        "bt": ["<if>"],
-        "if": ["if <condition>:{<action>}else:{<action>}"],
-        "condition": ["_in_{0}<comp_op><const_type_{0}>".format(k) for k in range(N_INPUT_VARIABLES)],
-        "action": ["out=_leaf;leaf=\"_leaf\"", "<if>"],
-        "comp_op": [" < ", " > "],
-    }
-    for index, input_var in enumerate(input_types):
-        start, stop, step, divisor = map(int, input_var)
-        consts_ = list(map(str, [float(c) / divisor for c in range(start, stop, step)])) # np.linspace?
-        grammar["const_type_{}".format(index)] = consts_ # add to the grammar values as symbols const_type_x => 0, 0.1, 0.2 (...)
-    
-    return grammar
-
 def get_oblique_split_grammar(input_types):
     consts = {}
 
     for index, input_var in enumerate(input_types):
         start, stop, step, divisor = map(int, input_var)
+        
+        assert divisor != 0, "Invalid divisor (division by zero)"
+        
         consts_ = list(map(str, [float(c) / divisor for c in range(start, stop, step)])) # np.linspace?
         consts[index] = (consts_[0], consts_[-1])
 
@@ -224,7 +212,7 @@ input_types = [AGENT_MIN, AGENT_MAX, STEP, DIVISOR] * (GRID_SIZE * GRID_SIZE) + 
 
 input_types = np.array(input_types).reshape(3 * GRID_SIZE * GRID_SIZE, 4)
 
-grammar = get_orthogonal_split_grammar(input_types)
+grammar = get_oblique_split_grammar(input_types)
 
 # ------------------------------------------------------------------
 #                   GYM ENVIRONMENT

@@ -1,5 +1,5 @@
 {
-    "stats": "arena11_higherMXP_MoreEPs",
+    "stats": "arena12_Oblique",
     "encouragement": 2,
     "normalize_reward": false,
     "time_penalty": 0.6,
@@ -16,7 +16,7 @@
     "seed": 42,
     "n_actions": 6,
     "learning_rate": "auto",
-    "episodes": 1000,
+    "episodes": 500,
     "episode_len": 1000,
     "generations": 100,
     "epsDecay": true,
