@@ -422,6 +422,9 @@ def eaArena(population, toolbox, cxpb, mutpb, ngen, episodes, statsdir=None, sta
         fig.savefig(f"{statsdir}/fitness.png")
         plt.close(fig)
 
+        with open(f"{statsdir}/fitnesses.json", 'w') as outfile:
+            json.dump(stats_fitness, outfile)
+
         # Save a plot of diversity
         fig, ax = plt.subplots()
         ax.set_xlabel("generation")
