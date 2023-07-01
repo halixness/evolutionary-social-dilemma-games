@@ -14,6 +14,7 @@ from grammatical_evolution import GrammaticalEvolutionTranslator
 import json
 import argparse
 import skimage.measure
+import math
 
 import random
 
@@ -52,6 +53,9 @@ parser.add_argument("--cooperation", default=False, type=bool, help="Force playe
 parser.add_argument("--grid", default=True, type=bool, help="Use the grid observation space.")
 parser.add_argument("--max_player_level", default=5, type=int, help="Max achievable player (and food?) level")
 parser.add_argument("--multitree", default=False, type=bool, help="Instantiate one DT per agent.")
+parser.add_argument("--constant_range", default=1000, type=int, help="Max magnitude for the constants being used (multiplied *10^-3). Default: 1000 => constants in [-1, 1]")
+parser.add_argument("--constant_step", default=1, type=int, help="Step used to generate the range of constants, mutliplied *10^-3")
+parser.add_argument("--with_bias", action="store_true", help="if used, then the the condition will be (sum ...) < <const>, otherwise (sum ...) < 0")
 
 parser.add_argument("--seed", default=0, type=int, help="Random seed")
 parser.add_argument("--n_actions", default=4, type=int, help="The number of action that the agent can perform in the environment")
@@ -89,7 +93,7 @@ np.random.seed(args.seed)
 S_ACTIONS = ["NONE", "NORTH", "SOUTH", "WEST", "EAST", "LOAD"]
 MAX_STEPS = 1000
 N_EPISODES = 50
-refresh_time = 0.1
+refresh_time = 0.05
 
 lr = "auto" if args.learning_rate == "auto" else float(args.learning_rate)
 
@@ -114,23 +118,46 @@ class ListWithParents(list):
 #                   DEFINING THE GRAMMAR
 # ------------------------------------------------------------------
 
+
+def get_oblique_split_grammar(input_types):
+    consts = {}
+
+    for index, input_var in enumerate(input_types):
+        start, stop, step, divisor = map(int, input_var)
+
+        assert divisor != 0, "Invalid divisor (division by zero)"
+        
+        consts_ = list(map(str, [float(c) / divisor for c in range(start, stop, step)])) # np.linspace?
+        consts[index] = (consts_[0], consts_[-1])
+
+    oblique_split = "+".join(["<const> * (_in_{0} - {1})/({2} - {1})".format(i, consts[i][0], consts[i][1]) for i in range(input_space_size)])
+
+    grammar = {
+        "bt": ["<if>"],
+        "if": ["if <condition>:{<action>}else:{<action>}"],
+        "action": ["out=_leaf;leaf=\"_leaf\"", "<if>"],
+        # "const": ["0", "<nz_const>"],
+        # there is an issue here with some zero divide
+        "const": [str(k/1000) for k in range(-args.constant_range,args.constant_range+1,args.constant_step)]
+    }
+
+    if not args.with_bias:
+        grammar["condition"] = [oblique_split + " < 0"]
+    else:
+        grammar["condition"] = [oblique_split + " < <const>"]    
+        
+    return grammar
+
+
 # Setup of the grammar
 if args.sight_downsampling: 
-    GRID_SIZE = (2 + args.sight * 2) // args.sight_downsampling
+    GRID_SIZE = math.ceil((2 + args.sight * 2) / args.sight_downsampling)
 else: 
     GRID_SIZE = (1 + args.sight * 2)
 
 N_INPUT_VARIABLES = 2 * GRID_SIZE * GRID_SIZE # for each player
 
 input_space_size = N_INPUT_VARIABLES
-
-grammar = {
-    "bt": ["<if>"],
-    "if": ["if <condition>:{<action>}else:{<action>}"],
-    "condition": ["_in_{0}<comp_op><const_type_{0}>".format(k) for k in range(N_INPUT_VARIABLES)],
-    "action": ["out=_leaf;leaf=\"_leaf\"", "<if>"],
-    "comp_op": [" < ", " > "],
-}
 
 DIVISOR = 1
 STEP = 1
@@ -141,16 +168,11 @@ AGENT_MAX = args.max_player_level * DIVISOR
 ACCESS_MIN = 0
 ACCESS_MAX = 1 * DIVISOR
 input_types = [AGENT_MIN, AGENT_MAX, STEP, DIVISOR] * (GRID_SIZE * GRID_SIZE) + \
-    [FOOD_MIN, FOOD_MAX, STEP, DIVISOR] * (GRID_SIZE * GRID_SIZE) + \
-    [ACCESS_MIN, ACCESS_MAX, STEP, DIVISOR] * (GRID_SIZE * GRID_SIZE)
+    [FOOD_MIN, FOOD_MAX, STEP, DIVISOR] * (GRID_SIZE * GRID_SIZE)
 
-input_types = np.array(input_types).reshape(3 * GRID_SIZE * GRID_SIZE, 4)
+input_types = np.array(input_types).reshape(2 * GRID_SIZE * GRID_SIZE, 4)
 
-# For all defined input spaces
-for index, input_var in enumerate(input_types):
-    start, stop, step, divisor = map(int, input_var)
-    consts_ = list(map(str, [float(c) / divisor for c in range(start, stop, step)])) # np.linspace?
-    grammar["const_type_{}".format(index)] = consts_ # add to the grammar values as symbols const_type_x => 0, 0.1, 0.2 (...)
+grammar = get_oblique_split_grammar(input_types)
 
 print(f"Grammar len:\t{len(grammar.keys())}")
 
@@ -172,32 +194,37 @@ def visualize_one_run(genome):
         Each processor runs an episode
     """
 
-    if args.multitree:
+    cum_episode_rewards = np.zeros(args.players)
 
-        population = [x for x in genome.values()]
+    for iteration in range(args.episodes):
 
-        # Random population sample
-        if args.players < len(population):
-            selected_sample = random.choices(population, k = args.players)
-        else: 
-            selected_sample = population
+        # ---- Switch players at every episode
+        if args.multitree:
 
-        agents = []
-        for ind in selected_sample:
-            phenotype, _ = GrammaticalEvolutionTranslator(grammar).genotype_to_str(ind)
+            population = [x for x in genome.values()]
+
+            # Random population sample
+            if args.players < len(population):
+                selected_sample = random.choices(list(range(len(population))), k = args.players)
+                print(f"Selected sample:\t{selected_sample}")
+                selected_sample = np.array(population)[selected_sample]
+            else: 
+                selected_sample = population
+
+            agents = []
+            for ind in selected_sample:
+                phenotype, _ = GrammaticalEvolutionTranslator(grammar).genotype_to_str(ind)
+                agent = PythonDT(phenotype, CLeaf) # object type
+                agents.append(agent)
+        else:
+            # Convert agent genome => phenotype => DT
+            phenotype, _ = GrammaticalEvolutionTranslator(grammar).genotype_to_str(genome)
             agent = PythonDT(phenotype, CLeaf) # object type
-            agents.append(agent)
-    else:
-        # Convert agent genome => phenotype => DT
-        phenotype, _ = GrammaticalEvolutionTranslator(grammar).genotype_to_str(genome)
-        agent = PythonDT(phenotype, CLeaf) # object type
-
-    for iteration, e in enumerate(range(args.episodes)):
-
-        observations = env.reset()
-        episode_rewards = np.zeros(args.players)
 
         env.seed(iteration)
+        observations = env.reset()
+        
+        episode_rewards = np.zeros(args.players)
         
         # Prepare
         if args.multitree: 
@@ -256,7 +283,9 @@ def visualize_one_run(genome):
             env.render()
             time.sleep(refresh_time)
 
-        print(f"Episode rewards: \t {episode_rewards}")
+        cum_episode_rewards += episode_rewards
+        #print(f"Episode rewards: \t {episode_rewards}")
+        print(f"Cum. episode rewards: \t {cum_episode_rewards}")
 
 # ------------------------------------------------------------------
 #                   Script exec

@@ -174,7 +174,7 @@ def eaSimple(population, toolbox, cxpb, mutpb, ngen, statsdir=None, stats=None,
     # if fitness: (population_size, players)
     fitnesses = [*toolbox.map(toolbox.evaluate, eval_invalid_inds)]
     
-    # Set individuals' fitness to the best player's one
+    # Set individuals' fitness to the sum
     for ind, fit in zip(invalid_ind, fitnesses):
         ind.fitness.values = [np.sum(fit[0][0])]
     
@@ -198,6 +198,7 @@ def eaSimple(population, toolbox, cxpb, mutpb, ngen, statsdir=None, stats=None,
                 log_.write("Leaves\n")
                 log_.write(str(leaves[i]) + "\n")
 
+    # HOF
     if halloffame is not None:
         halloffame.update(population)
 
@@ -323,6 +324,7 @@ def eaArena(population, toolbox, cxpb, mutpb, ngen, episodes, statsdir=None, sta
     eval_invalid_inds = [[{"individual": ind, "gen": 0, "episode": e} for ind in invalid_ind] for e in range(episodes)]
 
     # Parallelize episode-wise
+    # normally it's average over the episo
     fitnesses = np.mean(
         [*toolbox.map(toolbox.evaluate, eval_invalid_inds)], 
         axis=0
@@ -354,9 +356,9 @@ def eaArena(population, toolbox, cxpb, mutpb, ngen, episodes, statsdir=None, sta
 
         # Evaluate the individuals with an invalid fitness
         invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-        eval_invalid_inds = [[{"individual": ind, "gen": 0, "episode": e} for ind in invalid_ind] for e in range(episodes)]
+        eval_invalid_inds = [[{"individual": ind, "gen": gen, "episode": e} for ind in invalid_ind] for e in range(episodes)]
 
-        # Parallelize episode-wise
+        # Parallelize episode-wise & mean over all environment conditions
         fitnesses = np.mean(
             [*toolbox.map(toolbox.evaluate, eval_invalid_inds)], 
             axis=0
@@ -397,7 +399,7 @@ def eaArena(population, toolbox, cxpb, mutpb, ngen, episodes, statsdir=None, sta
                 if not os.path.exists(f"{statsdir}/generations/gen_{gen}"): 
                     os.makedirs(f"{statsdir}/generations/gen_{gen}")
 
-                with open(f"{statsdir}/generations/gen_{gen}/hof.json", 'w') as outfile:
+                with open(f"{statsdir}/generations/gen_{gen}/population.json", 'w') as outfile:
                     json.dump(best_ind, outfile)
             except:
                 print(f"[!!!] Could not store best individual for gen: {gen}")
@@ -429,6 +431,9 @@ def eaArena(population, toolbox, cxpb, mutpb, ngen, episodes, statsdir=None, sta
         ax.grid()
         fig.savefig(f"{statsdir}/diversity.png")
         plt.close(fig)
+
+        with open(f"{statsdir}/diversities.json", 'w') as outfile:
+            json.dump(diversities, outfile)
 
         best_leaves = []
         

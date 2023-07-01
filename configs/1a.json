@@ -1,4 +1,5 @@
 {
+    "stats": "1a",
     "encouragement": 1,
     "normalize_reward": true,
     "time_penalty": 0,
@@ -6,27 +7,25 @@
     "sight": 20,
     "sight_downsampling": 5,
     "pool_operator": "mean",
-    "field_size": 62,
+    "field_size": 35,
     
     "food": 67,
     "lambda_": 50,
     "max_player_level": 10,
-    "episodes": 4000,
-    "episode_len": 25,
+    "episodes": 1000,
+    "episode_len": 30,
 
-    "players": 3,
-    "playersamples": 10,
     "cooperation": false,
     "grid": true,
     "jobs": 16,
     "seed": 42,
     "n_actions": 6,
     "learning_rate": "auto",
-    "generations": 100,
+    "generations": 50,
     "eps": 0.25,
     
-    "genotype_len": 500,
-    "cxp": 0.5,
+    "genotype_len": 300,
+    "cxp": 0.1,
     "mp": 1,
     "mutation": {
         "function": "tools.mutUniformInt",
@@ -35,11 +34,13 @@
         "indpb": 0.9
     },
 
+    "with_bias": true,
     "epsDecay": false,
-    "df": 0.99,
+    "df": 0.9,
     "decay": 0.991,
     "crossover": {
-        "function": "tools.cxOnePoint"
+        "function": "tools.cxUniform",
+        "indpb": 0.4
     },
     "selection": {
         "function": "tools.selTournament",
@@ -51,5 +52,6 @@
     "config_file": "config.json",
     "constant_range": 1000,
     "constant_step": 1,
-    "with_bias": true
+    "players": 3,
+    "playersamples": 10
 }

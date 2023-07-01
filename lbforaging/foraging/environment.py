@@ -58,12 +58,14 @@ class Player:
         else:
             return "Player"
         
-    def store_load_action(self, agents_involved, food_level):
+    def store_load_action(self, agents_involved, food_level, nearby_players, nearby_food):
         self.stat_load_history.append({
             "agents_involved": int(agents_involved),
             "agent_level": int(self.level),
             "food_level": int(food_level),
-            "reward": float(self.reward)
+            "reward": float(self.reward),
+            "nearby_players": int(nearby_players),
+            "nearby_food": int(nearby_food)
         })
 
 
@@ -258,6 +260,22 @@ class ForagingEnv(Env):
             and player.position[1] == col
             or abs(player.position[1] - col) == 1
             and player.position[0] == row
+        ]
+    
+    def nearby_players(self, row, col, distance=1):
+        return [
+            player
+            for player in self.players
+            if abs(player.position[0] - row) <= distance
+            and player.position[1] == col
+            or abs(player.position[1] - col) <= distance
+            and player.position[0] == row
+        ]
+    
+    def nearby_food(self, row, col, distance=1):
+        return self.field[
+            max(row-distance, 0):min(row+distance, self.rows-1), 
+            max(col-distance, 0):min(col+distance, self.cols-1)
         ]
 
     def spawn_food(self, max_food, max_level):
@@ -485,9 +503,16 @@ class ForagingEnv(Env):
         self.field = np.zeros(self.field_size, np.int32)
         self.spawn_players(self.max_player_level)
         player_levels = sorted([player.level for player in self.players])
+        max_player_level = max([player.level for player in self.players])
 
+        """
+            original: the max food level is the sum of 3 weakest players (why?)
+            self.spawn_food(
+                self.max_food, max_level=sum(player_levels[:3])
+            )
+        """
         self.spawn_food(
-            self.max_food, max_level=sum(player_levels[:3])
+            self.max_food, max_level=max_player_level
         )
         self.current_step = 0
         self._game_over = False
@@ -583,9 +608,16 @@ class ForagingEnv(Env):
                     a.reward *= self.collab_encouragement
 
             # log the event for statistics
+            nearby_players = len(self.nearby_players(player.position[0], player.position[1], distance=5))-1
+            
+            nearby_food = self.nearby_food(player.position[0], player.position[1], distance=5)
+            nearby_food = len(nearby_food[nearby_food != 0])-1
+            
             player.store_load_action(
-                len(adj_players),           # agents involved
-                self.field[frow, fcol],     # food level
+                agents_involved=len(adj_players),           # agents involved
+                food_level=self.field[frow, fcol],          # food level
+                nearby_players=nearby_players,              # nearby_players
+                nearby_food=nearby_food                     # nearby_food
             )
 
             # and the food is removed

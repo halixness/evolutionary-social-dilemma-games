@@ -11,16 +11,38 @@ from tqdm import tqdm
 from numpy import random
 from time import time, sleep
 from gym.envs.registration import register
+import math
 
-from src.utils import string_to_dict
 from dt import EpsGreedyLeaf, PythonDT, RandomlyInitializedEpsGreedyLeaf
 from grammatical_evolution import GrammaticalEvolutionTranslator, grammatical_evolution, differential_evolution
 import skimage.measure
+
+# run this again with the params from the paper
 
 
 # ------------------------------------------------------------------
 #                   CLASSES & FUNCTIONS
 # ------------------------------------------------------------------
+
+def string_to_dict(x):
+    """
+    This function splits a string into a dict.
+    The string must be in the format: key0-value0#key1-value1#...#keyn-valuen
+    """
+    result = {}
+    items = x.split("#")
+
+    for i in items:
+        key, value = i.split("-")
+        try:
+            result[key] = int(value)
+        except:
+            try:
+                result[key] = float(value)
+            except:
+                result[key] = value
+
+    return result
 
 class CLeaf(RandomlyInitializedEpsGreedyLeaf):
     """
@@ -66,7 +88,6 @@ class EpsilonDecayLeaf(RandomlyInitializedEpsGreedyLeaf):
         self.epsilon = self.epsilon * self._decay
         self._steps += 1
         return super().get_action()
-
 
 # ----------------------------------
 
@@ -164,7 +185,7 @@ def get_oblique_split_grammar(input_types):
 
     for index, input_var in enumerate(input_types):
         start, stop, step, divisor = map(int, input_var)
-        
+
         assert divisor != 0, "Invalid divisor (division by zero)"
         
         consts_ = list(map(str, [float(c) / divisor for c in range(start, stop, step)])) # np.linspace?
@@ -188,9 +209,9 @@ def get_oblique_split_grammar(input_types):
         
     return grammar
 
-# Setup of the grammar
+# ---- Setup of the grammar
 if args.sight_downsampling: 
-    GRID_SIZE = (2 + args.sight * 2) // args.sight_downsampling
+    GRID_SIZE = math.ceil((2 + args.sight * 2) / args.sight_downsampling)
 else: 
     GRID_SIZE = (1 + args.sight * 2)
 
@@ -207,10 +228,9 @@ AGENT_MAX = args.max_player_level * DIVISOR
 ACCESS_MIN = 0
 ACCESS_MAX = 1 * DIVISOR
 input_types = [AGENT_MIN, AGENT_MAX, STEP, DIVISOR] * (GRID_SIZE * GRID_SIZE) + \
-    [FOOD_MIN, FOOD_MAX, STEP, DIVISOR] * (GRID_SIZE * GRID_SIZE) + \
-    [ACCESS_MIN, ACCESS_MAX, STEP, DIVISOR] * (GRID_SIZE * GRID_SIZE)
+    [FOOD_MIN, FOOD_MAX, STEP, DIVISOR] * (GRID_SIZE * GRID_SIZE)
 
-input_types = np.array(input_types).reshape(3 * GRID_SIZE * GRID_SIZE, 4)
+input_types = np.array(input_types).reshape(2 * GRID_SIZE * GRID_SIZE, 4)
 
 grammar = get_oblique_split_grammar(input_types)
 
@@ -247,7 +267,7 @@ def evaluate_fitness(fitness_function, leaf, genes, episodes=args.episodes):
         agents.append(bt)
     """
 
-    return fitness_function(agents, gen=gene["gen"], episode=gene["episode"])
+    return fitness_function(agents, gen=genes[0]["gen"], episode=genes[0]["episode"])
 
 
 def episode_parallel_fitness(agents, gen=None, episode=None):
@@ -280,7 +300,7 @@ def episode_parallel_fitness(agents, gen=None, episode=None):
         e = gym.make(env_id)
 
     # ---- Init
-    e.seed(episode) # each episode is a different environment
+    e.seed(episode)
     obs = e.reset()
 
     for agent in agents: agent.new_episode()
@@ -321,18 +341,23 @@ def episode_parallel_fitness(agents, gen=None, episode=None):
         if not (False in done): break
 
     # ---- Log history
-    if gen:
+    if gen is not None:
         try:
             if not os.path.exists(f"{statsdir}/generations/gen_{gen}"):
                 os.makedirs(f"{statsdir}/generations/gen_{gen}")
 
             for i, p in enumerate(e.players):
                 with open(f"{statsdir}/generations/gen_{gen}/player_{i}_stats.json", 'a') as outfile:
-                        outfile.write(f"{json.dumps(p.stat_load_history)}\n")
+                    outfile.write(f"{json.dumps({'episode': episode, 'reward': ep_cumulative_rewards[i], 'actions': p.stat_load_history})}\n")
         except:
             print(f"[!] Error in storing stats for player {i}, gen {gen}")
 
     e.close()
+
+    # Relative group fitness (social contribution)
+    # If players have not contributed much to the group fitness => low
+    # ep_cumulative_rewards /= ep_cumulative_rewards.sum()
+
     return ep_cumulative_rewards
 
 
