@@ -138,6 +138,7 @@ args = parser.parse_args()
 
 # Load from JSON if possible
 if args.config_file:
+    print(f"[-] Running experiment: {args.config_file}...")
     with open(args.config_file, "r") as agsCfgFile:
         t_args = argparse.Namespace()
         t_args.__dict__.update(json.load(agsCfgFile))
