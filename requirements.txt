@@ -1,3 +1,9 @@
 deap
 pathos
 scoop
+tqdm
+matplotlib
+numpy==1.23.5
+joblib==1.2.0
+scipy
+scikit-image

@@ -4,8 +4,18 @@
 To study what behaviors emerge in a social game where players evolve.
 
 ## Questions
+Setting of the plots: for each environment condition, plot the normal and forced coop learning curve.
+In each plot add the two diversity curves as well ([plots with multiple scales](https://matplotlib.org/3.1.0/gallery/subplots_axes_and_figures/two_scales.html)). Add the diversities and also the genetic relatedness curve.
+
 - Does evolution encourage selfish behavior (competition) or cooperation?
-- Under what conditions can 
+See the difference between forced cooperation and spontaneous in average rewards.
+
+- Under what conditions can
+See how reward curve changes over multiple conditions
+Tested conditions: 
+    force coop: 0a, 0b, 0c, 1c, 2c
+    normal:     0a, 0b, 0c, 1c, 2c
+
 
 ## Proposed methodology
 Evolution of decision tree structures. The leaves are then trained with Q-Learning (to map from a state to an action through classification).
