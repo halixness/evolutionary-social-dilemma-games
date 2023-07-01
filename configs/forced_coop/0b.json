@@ -17,7 +17,7 @@
 
     "cooperation": true,
     "grid": true,
-    "jobs": 16,
+    "jobs": 32,
     "seed": 42,
     "n_actions": 6,
     "learning_rate": "auto",
