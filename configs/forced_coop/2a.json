@@ -12,8 +12,8 @@
     "food": 67,
     "lambda_": 50,
     "max_player_level": 10,
-    "episodes": 3000,
-    "episode_len": 30,
+    "episodes": 1000,
+    "episode_len": 200,
 
     "cooperation": true,
     "grid": true,
