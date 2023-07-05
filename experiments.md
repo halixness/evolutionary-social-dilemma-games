@@ -86,10 +86,10 @@ From [Christianos et al. 2019](https://arxiv.org/abs/2006.07169).
 
 | Condition | Tiles | Players | players/tile | Food | players/food | Level |
 |---|---|---|---|---|---|---|
-| $a^{[1]}$ | 10x10 | 3 | 0.030 | 3 | 1 | 1 |
+| $b^{[1]}$ | 10x10 | 3 | 0.030 | 3 | 1 | 1 |
 | $d^{[1]}$ | 8x8 | 2 | 0.031 | 2 | 1 | 1 |
 | $c^{[1]}$ | 15x15 | 3 | 0.013 | 4 | 0.75 | 2.a |
-| $b^{[1]}$ | 12x12 | 2 | 0.014 | 1 | 2 | 2.b |
+| $a^{[1]}$ | 12x12 | 2 | 0.014 | 1 | 2 | 2.b |
 
 ### Social pressure in evolutionary social dilemmas
 
@@ -102,17 +102,17 @@ Here follow the previous conditions from LBF but scaled to the population consid
 | Condition | Tiles | Players | players/tile | Food | players/food | Social pressure | Food scarcity |
 |---|---|---|---|---|---|---|---|
 | $0.c^{[2]}$ | 62x62 | 50 | 0.013 | 67 | 0.75 | 1 | 3 |
-| $0.a^{[2]}$ | 41x41 | 50 | 0.030 | 50 | 1 | 2 | 2 | 
-| $0.b^{[2]}$ | 60x60 | 50 | 0.014 | 25 | 2 | 1 | 1 |
+| $0.b^{[2]}$ | 41x41 | 50 | 0.030 | 50 | 1 | 2 | 2 | 
+| $0.a^{[2]}$ | 60x60 | 50 | 0.014 | 25 | 2 | 1 | 1 |
 
 New conditions:
 
 | Condition | Tiles | Players | players/tile | Food | players/food | Social pressure | Food scarcity |
 |---|---|---|---|---|---|---|---|
-| $1.a^{[2]}$ | 35x35 | 50 | 0.04 | 67 | 0.75 | 2 | 3 |
-| $1.c^{[2]}$ | 35x35 | 50 | 0.04 | 25 | 2 | 2 | 1 |
-| $2.a^{[2]}$ | 25x25 | 50 | 0.08 | 67 | 0.75 | 3 | 3 |
-| $2.c^{[2]}$ | 25x25 | 50 | 0.08 | 25 | 2 | 3 | 1 |
+| $1.c^{[2]}$ | 35x35 | 50 | 0.04 | 67 | 0.75 | 2 | 3 |
+| $1.a^{[2]}$ | 35x35 | 50 | 0.04 | 25 | 2 | 2 | 1 |
+| $2.c^{[2]}$ | 25x25 | 50 | 0.08 | 67 | 0.75 | 3 | 3 |
+| $2.a^{[2]}$ | 25x25 | 50 | 0.08 | 25 | 2 | 3 | 1 |
 
 ### Social utility
 From the idea of group selection (Wynne-Edwards, 1986 and Michod, 1999), the population of individuals can be seen as a society. Contributing to the society means doing actions leading to the survival of as many individuals as possible: this ensures diversity and thus new behaviors.

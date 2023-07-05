@@ -133,6 +133,9 @@ parser.add_argument("--genotype_len", default=100, type=int, help="Length of the
 parser.add_argument("--low", default=-10, type=float, help="Lower bound for the random initialization of the leaves")
 parser.add_argument("--up", default=10, type=float, help="Upper bound for the random initialization of the leaves")
 
+parser.add_argument("--dt_type", default="orthogonal", required=True, choices=["orthogonal", "oblique"], type=str, help="The type of splits in the DT nodes (orthogonal/oblique)")
+
+
 # Parse args
 args = parser.parse_args()
 
@@ -180,6 +183,22 @@ else:
 # ------------------------------------------------------------------
 #                   DEFINING THE GRAMMAR
 # ------------------------------------------------------------------
+
+def get_orthogonal_split_grammar(input_types):
+    grammar = {
+        "bt": ["<if>"],
+        "if": ["if <condition>:{<action>}else:{<action>}"],
+        "condition": ["_in_{0}<comp_op><const_type_{0}>".format(k) for k in range(N_INPUT_VARIABLES)],
+        "action": ["out=_leaf;leaf=\"_leaf\"", "<if>"],
+        "comp_op": [" < ", " > "],
+    }
+    for index, input_var in enumerate(input_types):
+        start, stop, step, divisor = map(int, input_var)
+        consts_ = list(map(str, [float(c) / divisor for c in range(start, stop, step)])) # np.linspace?
+        grammar["const_type_{}".format(index)] = consts_ # add to the grammar values as symbols const_type_x => 0, 0.1, 0.2 (...)
+    
+    return grammar
+
 
 def get_oblique_split_grammar(input_types):
     consts = {}
@@ -233,7 +252,12 @@ input_types = [AGENT_MIN, AGENT_MAX, STEP, DIVISOR] * (GRID_SIZE * GRID_SIZE) + 
 
 input_types = np.array(input_types).reshape(2 * GRID_SIZE * GRID_SIZE, 4)
 
-grammar = get_oblique_split_grammar(input_types)
+# Grammar depends on the chosen type of split
+if args.dt_type == "oblique":
+    grammar = get_oblique_split_grammar(input_types)
+
+elif args.dt_type == "orthogonal":
+    grammar = get_orthogonal_split_grammar(input_types)
 
 # ------------------------------------------------------------------
 #                   GYM ENVIRONMENT
